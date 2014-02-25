@@ -107,7 +107,7 @@ def match_bc(read, bcs, max_spacer = 7, max_hamming = 2):
   # greedy barcode matching algorithm returns first barcode with a match
   # of less than or equal to max_hamming distance away
 
-  for i in range(0, max_spacer):
+  for i in range(0, max_spacer + 1):
     for barcode in bcs:
       if hamming_dist(read[i:i+len(barcode)], barcode) <= max_hamming:
         # barcode match
@@ -178,8 +178,11 @@ def load_barcodes(bc_file):
     else:
       l = dict(zip(header, l.strip().split("\t")))
 
-      left_bcs.append(l["left"])
-      right_bcs.append(l["right"])
+      if l["position"] == "left":
+        left_bcs.append(l["barcode"])
+
+      if l["position"] == "right":
+        right_bcs.append(l["barcode"])
 
   return (left_bcs, right_bcs)
 
@@ -281,6 +284,9 @@ def main():
     print "Error: Specified path exists and is not a directory"
     parser.print_help()
     sys.exit(1)
+
+  # load barcodes
+  left_bcs, right_bcs = load_barcodes(args[2])
 
   # open zipfile
   miseq_zip = zipfile.ZipFile(args[0])
@@ -407,10 +413,10 @@ def main():
         if dm_out == False:
           # strip pair info from read and write to unassigned file
           l_read.id = l_read.id.split(" ")[0]
-          l_unassigned.write(seq_rec.raw())
+          l_unassigned.write(l_read.raw())
 
           r_read.id = r_read.id.split(" ")[0]
-          r_unassigned.write(seq_rec.raw())
+          r_unassigned.write(r_read.raw())
         else:
           # rename reads to barcodes used and write to assigned file
           l_read, r_read, l_bc, r_bc = dm_out
@@ -436,7 +442,7 @@ def main():
       sys.stderr.write("\n  total reads:       %d" % total_reads)
       sys.stderr.write("\n  quality reads:     %d" % quality_reads)
       sys.stderr.write("\n  assigned reads:    %d" % sum(barcode_to_count.values()))
-      sys.stderr.write("\n  unassigned reads:  %d" % quality_reads - sum(barcode_to_count.values()))
+      sys.stderr.write("\n  unassigned reads:  %d" % (quality_reads - sum(barcode_to_count.values())))
       sys.stderr.write("\n  avg reads/barcode: %d\n" % mean(barcode_to_count.values()))
 
 if __name__ == "__main__":
