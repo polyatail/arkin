@@ -131,12 +131,16 @@ def demultiplex(fastq_fwd, fwd_bcs, rev_bcs, fastq_rev = None):
     # couldn't match to both fwd and rev barcodes
     return False
   else:
+    # trim reads and quality scores
     if fastq_rev == None:
       # merged read
       fastq_fwd.sequence = fastq_fwd.sequence[fwd_match[0]+len(fwd_match[1]):-(rev_match[0]+len(rev_match[1]))]
+      fastq_fwd.quals = fastq_fwd.quals[fwd_match[0]+len(fwd_match[1]):-(rev_match[0]+len(rev_match[1]))]
     else:
       fastq_fwd.sequence = fastq_fwd.sequence[fwd_match[0]+len(fwd_match[1]):]
+      fastq_fwd.quals = fastq_fwd.quals[fwd_match[0]+len(fwd_match[1]):]
       fastq_rev.sequence = fastq_rev.sequence[rev_match[0]+len(rev_match[1]):]
+      fastq_rev.quals = fastq_rev.quals[rev_match[0]+len(rev_match[1]):]
 
     return (fastq_fwd, fastq_rev, fwd_match[1], rev_match[1])
 
