@@ -169,8 +169,8 @@ def qual_filter(read):
     return True
 
 def load_barcodes(bc_file):
-  fwd_bcs = []
-  rev_bcs = []
+  fwd_bcs = {}
+  rev_bcs = {}
 
   for l in open(bc_file, "r"):
     if l.startswith("#"):
@@ -179,10 +179,10 @@ def load_barcodes(bc_file):
       l = dict(zip(header, l.strip().split("\t")))
 
       if l["orientation"] == "forward":
-        fwd_bcs.append(l["barcode"])
+        fwd_bcs[l["name"]] = l["barcode"])
 
       if l["orientation"] == "reverse":
-        rev_bcs.append(l["barcode"])
+        rev_bcs[l["name"]] = l["barcode"])
 
   return (fwd_bcs, rev_bcs)
 
@@ -341,7 +341,7 @@ def main():
         total_quality_read_length += len(merged_read.sequence)
 
         # demultiplex
-        dm_out = demultiplex(merged_read, fwd_bcs, rev_bcs, None)
+        dm_out = demultiplex(merged_read, fwd_bcs.values(), rev_bcs.values(), None)
  
         if dm_out == False:
           # strip pair info from read and write to unassigned file
@@ -408,7 +408,7 @@ def main():
         quality_reads += 1
 
         # demultiplex
-        dm_out = demultiplex(f_read, fwd_bcs, rev_bcs, r_read)
+        dm_out = demultiplex(f_read, fwd_bcs.values(), rev_bcs.values(), r_read)
  
         if dm_out == False:
           # strip pair info from read and write to unassigned file
