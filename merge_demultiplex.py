@@ -8,6 +8,7 @@ __version__ = 1.0
 from optparse import OptionParser, OptionGroup
 from numpy import mean
 from itertools import izip
+from fastq import fast_fastq
 import sys
 import time
 import os
@@ -134,37 +135,12 @@ def demultiplex(fastq_fwd, fwd_bcs, rev_bcs, fastq_rev = None):
     # trim reads and quality scores
     if fastq_rev == None:
       # merged read
-      fastq_fwd.sequence = fastq_fwd.sequence[fwd_match[0]+len(fwd_match[1]):-(rev_match[0]+len(rev_match[1]))]
-      fastq_fwd.quals = fastq_fwd.quals[fwd_match[0]+len(fwd_match[1]):-(rev_match[0]+len(rev_match[1]))]
+      fastq_fwd = fastq_fwd[fwd_match[0]+len(fwd_match[1]):-(rev_match[0]+len(rev_match[1]))]
     else:
-      fastq_fwd.sequence = fastq_fwd.sequence[fwd_match[0]+len(fwd_match[1]):]
-      fastq_fwd.quals = fastq_fwd.quals[fwd_match[0]+len(fwd_match[1]):]
-      fastq_rev.sequence = fastq_rev.sequence[rev_match[0]+len(rev_match[1]):]
-      fastq_rev.quals = fastq_rev.quals[rev_match[0]+len(rev_match[1]):]
+      fastq_fwd = fastq_fwd[fwd_match[0]+len(fwd_match[1]):]
+      fastq_rev = fastq_rev[rev_match[0]+len(rev_match[1]):]
 
     return (fastq_fwd, fastq_rev, fwd_match[1], rev_match[1])
-
-def fast_fastq(fp_in):
-    buf = []
-
-    for line in fp_in:
-        buf.append(line)
-
-        if len(buf) == 4:
-            yield fastq_record(buf, 0)
-            buf = []
-
-class fastq_record():
-    def __init__(self, lines, offset):
-        lines = [x.strip() for x in lines]
-
-        self.id = lines[0][1:]
-        self.sequence = lines[1]
-        self.quals = lines[3]
-        self.offset = offset
-
-    def raw(self):
-        return "\n".join(["@%s" % (self.id,), self.sequence, "+", self.quals, ""])
 
 def qual_filter(read):
   if mean([ord(x) - options.phred_offset for x in read.quals]) < options.min_qual:
