@@ -184,10 +184,10 @@ def load_barcodes(bc_file):
       l = dict(zip(header, l.strip().split("\t")))
 
       if l["orientation"] == "forward":
-        fwd_bcs[l["name"]] = l["barcode"])
+        fwd_bcs[l["name"]] = l["barcode"]
 
       if l["orientation"] == "reverse":
-        rev_bcs[l["name"]] = l["barcode"])
+        rev_bcs[l["name"]] = l["barcode"]
 
   return (fwd_bcs, rev_bcs)
 
