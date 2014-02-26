@@ -172,9 +172,14 @@ def load_barcodes(bc_file):
   fwd_bcs = {}
   rev_bcs = {}
 
+  header = False
+
   for l in open(bc_file, "r"):
     if l.startswith("#"):
-      header = l[1:].strip().split("\t")
+      if header:
+        continue
+      elif l.startswith("#name"):
+        header = l[1:].strip().split("\t")
     else:
       l = dict(zip(header, l.strip().split("\t")))
 
