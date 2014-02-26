@@ -24,7 +24,8 @@ def usearch(input_fname, output_fname, params = []):
                               "-db", args[0],
                               "-blast6out", output_fname,
                               "-strand", "both",
-                              "-id", str(options.identity)] + \
+                              "-id", str(options.identity),
+                              "-threads", str(options.num_threads)] + \
                              params,
                              stderr=subprocess.STDOUT,
                              stdout=open(os.devnull))
@@ -113,6 +114,13 @@ def parse_options(arguments):
                     type="str",
                     default=False,
                     help="path to FASTQ containing merged reads")
+
+  parser.add_option("-p",
+                    dest="num_threads",
+                    type="int",
+                    metavar="[1]",
+                    default=1,
+                    help="number of threads used during analysis")
 
   parser.add_option("--id",
                     dest="identity",
