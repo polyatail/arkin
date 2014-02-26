@@ -125,8 +125,8 @@ def parse_options(arguments):
   parser.add_option("--id",
                     dest="identity",
                     type="int",
-                    metavar="[97]",
-                    default=97,
+                    metavar="[95]",
+                    default=95,
                     help="minimum percent identity for matches")
 
   options, args = parser.parse_args(arguments)
@@ -185,13 +185,13 @@ def main():
     sys.stderr.write("\n  Aligned reads:     %d" % aligned_reads)
     sys.stderr.write("\n  Unaligned reads:   %d" % (total_reads - aligned_reads))
   else:
-    sys.stderr.write("Converting forward reads to fasta...\n")
+    sys.stderr.write("Converting forward reads to FASTA...\n")
     fwd_fasta = fastq_to_fasta(options.fwd_fname)
     fwd_b6 = os.path.join(options.output_dir, "fwd_reads.usearch.b6")
     sys.stderr.write("Running USEARCH on forward reads...\n")
     usearch(fwd_fasta.name, fwd_b6)
 
-    sys.stderr.write("Converting reverse reads to fasta...\n")
+    sys.stderr.write("Converting reverse reads to FASTA...\n")
     rev_fasta = fastq_to_fasta(options.rev_fname)
     rev_b6 = os.path.join(options.output_dir, "rev_reads.usearch.b6")
     sys.stderr.write("Running USEARCH on reverse reads...\n")

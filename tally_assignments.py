@@ -138,20 +138,21 @@ def main():
     except KeyError:
       table[sample][l[1]] = 1
 
-  taxa_order = list(taxa)
-
-  print "\t".join(["sample"] + taxa_order)
-
-  for sample in sorted(table.keys()):
-    row = [sample]
-
-    for taxon in taxa_order:
-      try:
-        row.append(table[sample][taxon])
-      except KeyError:
-        row.append(0)
-
-    print "\t".join(map(str, row))
+  with open(os.path.join(options.output_dir, "tally.txt"), "w") as fp:
+    taxa_order = list(taxa)
+  
+    fp.write("\t".join(["sample"] + taxa_order) + "\n")
+  
+    for sample in sorted(table.keys()):
+      row = [sample]
+  
+      for taxon in taxa_order:
+        try:
+          row.append(table[sample][taxon])
+        except KeyError:
+          row.append(0)
+  
+      fp.write("\t".join(map(str, row)) + "\n")
 
 if __name__ == "__main__":
   main()
