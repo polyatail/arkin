@@ -105,12 +105,12 @@ def find_pairs(zipfile_obj):
 
   return list(set(pairs))
 
-def match_bc(read, bcs, max_hamming = 2):
+def match_bc(read, bcs):
   # greedy barcode matching algorithm returns first barcode with a match
-  # of less than or equal to max_hamming distance away
+  # hamming distance <= max mismatches away
 
   for barcode in bcs:
-    if hamming_dist(read[i:i+len(barcode)], barcode) <= max_hamming:
+    if hamming_dist(read[i:i+len(barcode)], barcode) <= options.max_mismatch:
       # barcode match
       return (i, barcode)
   else:
@@ -202,6 +202,13 @@ def parse_options(arguments):
                     metavar="[25]",
                     default=25,
                     help="discard reads with mean quality below this value")
+
+  parser.add_option("--max-mismatch",
+                    dest="max_mismatch",
+                    type="int",
+                    metavar="[2]",
+                    default=2,
+                    help="maximum allowed mismatches in barcodes")
 
   parser.add_option("--merge",
                     dest="merge",
