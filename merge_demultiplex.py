@@ -300,7 +300,7 @@ def main():
   barcode_to_count = {}
 
   if options.merge:
-    sys.stderr.write("merging reads...\n")
+    sys.stderr.write("Merging reads...\n")
 
     with open(os.path.join(options.output_dir, "merged_reads.assigned.fastq"), "w") as assigned, \
          open(os.path.join(options.output_dir, "merged_reads.unassigned.fastq"), "w") as unassigned:
@@ -319,7 +319,7 @@ def main():
       merged, stats = pear(fwd.name, rev.name)
   
       if stats["assembled_reads"] < options.min_merged_perc:
-        sys.stderr.write("  warning: only %.02f%% of reads assembled\n" % stats["assembled_reads"])
+        sys.stderr.write("  Warning: only %.02f%% of reads assembled\n" % stats["assembled_reads"])
   
       # read through fastq
       for merged_read in fast_fastq(open("%s.assembled.fastq" % merged.name, "r")):
@@ -372,19 +372,19 @@ def main():
   
       if total_reads > 0:
         if quality_reads / total_reads < options.min_qual_perc:
-          sys.stderr.write("  warning: only %.02f%% of reads passed quality filter (mean(qv) > %s)\n" % (quality_reads * 100 / total_reads, options.min_qual))
+          sys.stderr.write("  Warning: only %.02f%% of reads passed quality filter (mean(qv) > %s)\n" % (quality_reads * 100 / total_reads, options.min_qual))
 
-      sys.stderr.write("\nsummary")
-      sys.stderr.write("\n  total reads:       %d" % total_reads)
-      sys.stderr.write("\n  quality reads:     %d" % quality_reads)
-      sys.stderr.write("\n  min read length:   %d" % min_quality_read_length)
-      sys.stderr.write("\n  mean read length:  %d" % (total_quality_read_length / quality_reads))
-      sys.stderr.write("\n  max read length:   %d\n" % max_quality_read_length)
-      sys.stderr.write("\n  assigned reads:    %d" % sum(barcode_to_count.values()))
-      sys.stderr.write("\n  unassigned reads:  %d" % quality_reads - sum(barcode_to_count.values()))
-      sys.stderr.write("\n  avg reads/barcode: %d\n" % mean(barcode_to_count.values()))
+      sys.stderr.write("\nSummary")
+      sys.stderr.write("\n  Total reads:       %d" % total_reads)
+      sys.stderr.write("\n  Quality reads:     %d" % quality_reads)
+      sys.stderr.write("\n  Min read length:   %d" % min_quality_read_length)
+      sys.stderr.write("\n  Mean read length:  %d" % (total_quality_read_length / quality_reads))
+      sys.stderr.write("\n  Max read length:   %d\n" % max_quality_read_length)
+      sys.stderr.write("\n  Assigned reads:    %d" % sum(barcode_to_count.values()))
+      sys.stderr.write("\n  Unassigned reads:  %d" % quality_reads - sum(barcode_to_count.values()))
+      sys.stderr.write("\n  Avg reads/barcode: %d\n" % mean(barcode_to_count.values()))
   else:
-    sys.stderr.write("filtering reads...\n")
+    sys.stderr.write("Filtering reads...\n")
 
     with open(os.path.join(options.output_dir, "fwd_reads.assigned.fastq"), "w") as f_assigned, \
          open(os.path.join(options.output_dir, "rev_reads.assigned.fastq"), "w") as r_assigned, \
@@ -436,14 +436,14 @@ def main():
 
       if total_reads > 0:
         if quality_reads / total_reads < options.min_qual_perc:
-          sys.stderr.write("  warning: only %.02f%% of reads passed quality filter (mean(qv) > %s)\n" % (quality_reads * 100 / total_reads, options.min_qual))
+          sys.stderr.write("  Warning: only %.02f%% of reads passed quality filter (mean(qv) > %s)\n" % (quality_reads * 100 / total_reads, options.min_qual))
 
-      sys.stderr.write("\nsummary")
-      sys.stderr.write("\n  total reads:       %d" % total_reads)
-      sys.stderr.write("\n  quality reads:     %d" % quality_reads)
-      sys.stderr.write("\n  assigned reads:    %d" % sum(barcode_to_count.values()))
-      sys.stderr.write("\n  unassigned reads:  %d" % (quality_reads - sum(barcode_to_count.values())))
-      sys.stderr.write("\n  avg reads/barcode: %d\n" % mean(barcode_to_count.values()))
+      sys.stderr.write("\nSummary")
+      sys.stderr.write("\n  Total reads:       %d" % total_reads)
+      sys.stderr.write("\n  Quality reads:     %d" % quality_reads)
+      sys.stderr.write("\n  Assigned reads:    %d" % sum(barcode_to_count.values()))
+      sys.stderr.write("\n  Unassigned reads:  %d" % (quality_reads - sum(barcode_to_count.values())))
+      sys.stderr.write("\n  Avg reads/barcode: %d\n" % mean(barcode_to_count.values()))
 
 if __name__ == "__main__":
   main()
