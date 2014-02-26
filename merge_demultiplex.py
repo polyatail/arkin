@@ -105,15 +105,14 @@ def find_pairs(zipfile_obj):
 
   return list(set(pairs))
 
-def match_bc(read, bcs, max_spacer = 7, max_hamming = 2):
+def match_bc(read, bcs, max_hamming = 2):
   # greedy barcode matching algorithm returns first barcode with a match
   # of less than or equal to max_hamming distance away
 
-  for i in range(0, max_spacer + 1):
-    for barcode in bcs:
-      if hamming_dist(read[i:i+len(barcode)], barcode) <= max_hamming:
-        # barcode match
-        return (i, barcode)
+  for barcode in bcs:
+    if hamming_dist(read[i:i+len(barcode)], barcode) <= max_hamming:
+      # barcode match
+      return (i, barcode)
   else:
     return False
 
