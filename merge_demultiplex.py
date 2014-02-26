@@ -180,8 +180,8 @@ def parse_options(arguments):
 
   parser.add_option("-o",
                     dest="output_dir",
-                    metavar="[./miseq_out]",
-                    default="./miseq_out",
+                    metavar="[./]",
+                    default="./",
                     help="write output files to this directory")
 
   parser.add_option("-p",
