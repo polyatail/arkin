@@ -36,15 +36,15 @@ def fetch_unzip(zipfile_obj, filename):
 
   return ungzipped
 
-def pear(left_fname, right_fname):
-  # accepts left and right paired end reads, returns temporary file containing
+def pear(fwd_fname, rev_fname):
+  # accepts fwd and rev paired end reads, returns temporary file containing
   # presumably overlapping reads merged into single reads and percentage of
   # reads unable to be merged (high % indicates a problem)
 
   outfile = tempfile.NamedTemporaryFile(delete=False)
 
   pear = subprocess.Popen([PATH_TO_PEAR,
-                           "-f", left_fname, "-r", right_fname,
+                           "-f", fwd_fname, "-r", rev_fname,
                            "-o", outfile.name,
                            "-y", options.mem_size, "-j", str(options.num_threads),
                            "-p", "0.01"],
@@ -115,30 +115,30 @@ def match_bc(read, bcs, max_spacer = 7, max_hamming = 2):
   else:
     return False
 
-def demultiplex(fastq_left, left_bcs, right_bcs, fastq_right = None):
+def demultiplex(fastq_fwd, fwd_bcs, rev_bcs, fastq_rev = None):
   # takes input reads, tries to assign them bins based on barcodes, then
   # returns trimmed reads and bin name
 
-  left_match = match_bc(fastq_left.sequence, left_bcs)
+  fwd_match = match_bc(fastq_fwd.sequence, fwd_bcs)
 
-  if fastq_right == None:
+  if fastq_rev == None:
     # merged read
-    right_match = match_bc(fastq_left.sequence[::-1], right_bcs)
+    rev_match = match_bc(fastq_fwd.sequence[::-1], rev_bcs)
   else:
-    right_match = match_bc(fastq_right.sequence, right_bcs)
+    rev_match = match_bc(fastq_rev.sequence, rev_bcs)
 
-  if left_match == False or right_match == False:
-    # couldn't match to both left and right barcodes
+  if fwd_match == False or rev_match == False:
+    # couldn't match to both fwd and rev barcodes
     return False
   else:
-    if fastq_right == None:
+    if fastq_rev == None:
       # merged read
-      fastq_left.sequence = fastq_left.sequence[left_match[0]+len(left_match[1]):-(right_match[0]+len(right_match[1]))]
+      fastq_fwd.sequence = fastq_fwd.sequence[fwd_match[0]+len(fwd_match[1]):-(rev_match[0]+len(rev_match[1]))]
     else:
-      fastq_left.sequence = fastq_left.sequence[left_match[0]+len(left_match[1]):]
-      fastq_right.sequence = fastq_right.sequence[right_match[0]+len(right_match[1]):]
+      fastq_fwd.sequence = fastq_fwd.sequence[fwd_match[0]+len(fwd_match[1]):]
+      fastq_rev.sequence = fastq_rev.sequence[rev_match[0]+len(rev_match[1]):]
 
-    return (fastq_left, fastq_right, left_match[1], right_match[1])
+    return (fastq_fwd, fastq_rev, fwd_match[1], rev_match[1])
 
 def fast_fastq(fp_in):
     buf = []
@@ -169,8 +169,8 @@ def qual_filter(read):
     return True
 
 def load_barcodes(bc_file):
-  left_bcs = []
-  right_bcs = []
+  fwd_bcs = []
+  rev_bcs = []
 
   for l in open(bc_file, "r"):
     if l.startswith("#"):
@@ -178,13 +178,13 @@ def load_barcodes(bc_file):
     else:
       l = dict(zip(header, l.strip().split("\t")))
 
-      if l["position"] == "left":
-        left_bcs.append(l["barcode"])
+      if l["position"] == "forward":
+        fwd_bcs.append(l["barcode"])
 
-      if l["position"] == "right":
-        right_bcs.append(l["barcode"])
+      if l["position"] == "reverse":
+        rev_bcs.append(l["barcode"])
 
-  return (left_bcs, right_bcs)
+  return (fwd_bcs, rev_bcs)
 
 def parse_options(arguments):
   global options, args
@@ -222,7 +222,7 @@ def parse_options(arguments):
                     dest="merge",
                     action="store_true",
                     default=False,
-                    help="merge left and right reads with PEAR")
+                    help="merge forward and reverse reads with PEAR")
 
   parser.add_option("--phred_offset",
                     dest="phred_offset",
@@ -286,7 +286,7 @@ def main():
     sys.exit(1)
 
   # load barcodes
-  left_bcs, right_bcs = load_barcodes(args[2])
+  fwd_bcs, rev_bcs = load_barcodes(args[2])
 
   # open zipfile
   miseq_zip = zipfile.ZipFile(args[0])
@@ -312,58 +312,58 @@ def main():
       quality_reads = 0.0
 
       # extract read files
-      left = fetch_unzip(miseq_zip, pairs[args[1]][0])
-      right = fetch_unzip(miseq_zip, pairs[args[1]][1])
+      fwd = fetch_unzip(miseq_zip, pairs[args[1]][0])
+      rev = fetch_unzip(miseq_zip, pairs[args[1]][1])
   
       # run pear to merge reads
-      merged, stats = pear(left.name, right.name)
+      merged, stats = pear(fwd.name, rev.name)
   
       if stats["assembled_reads"] < options.min_merged_perc:
         sys.stderr.write("  warning: only %.02f%% of reads assembled\n" % stats["assembled_reads"])
   
       # read through fastq
-      for seq_rec in fast_fastq(open("%s.assembled.fastq" % merged.name, "r")):
+      for merged_read in fast_fastq(open("%s.assembled.fastq" % merged.name, "r")):
         total_reads += 1
   
         # check that read passes quality filter
-        if not qual_filter(seq_rec):
+        if not qual_filter(merged_read):
           continue
 
         # keep track of stats
         quality_reads += 1
 
-        if len(seq_rec.sequence) < min_read_length:
-          min_quality_read_length = len(seq_rec.sequence)
+        if len(merged_read.sequence) < min_read_length:
+          min_quality_read_length = len(merged_read.sequence)
 
-        if len(seq_rec.sequence) > max_read_length:
-          max_quality_read_length = len(seq_rec.sequence)
+        if len(merged_read.sequence) > max_read_length:
+          max_quality_read_length = len(merged_read.sequence)
   
-        total_quality_read_length += len(seq_rec.sequence)
+        total_quality_read_length += len(merged_read.sequence)
 
         # demultiplex
-        dm_out = demultiplex(seq_rec, left_bcs, right_bcs, None)
+        dm_out = demultiplex(merged_read, fwd_bcs, rev_bcs, None)
  
         if dm_out == False:
           # strip pair info from read and write to unassigned file
-          seq_rec.id = seq_rec.id.split(" ")[0]
-          unassigned.write(seq_rec.raw())
+          merged_read.id = merged_read.id.split(" ")[0]
+          unassigned.write(merged_read.raw())
         else:
           # rename read to barcodes used and write to assigned file
-          l_read, r_read, l_bc, r_bc = dm_out
+          f_read, r_read, f_bc, r_bc = dm_out
 
-          bc_name = "%s_%s" % (l_bc, r_bc)
+          bc_name = "%s_%s" % (f_bc, r_bc)
 
           try:
             barcode_to_count[bc_name] += 1
           except KeyError:
             barcode_to_count[bc_name] = 1
 
-          l_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
-          assigned.write(l_read.raw())
+          f_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
+          assigned.write(f_read.raw())
   
       # remove temporary files
-      os.unlink(left.name)
-      os.unlink(right.name)
+      os.unlink(fwd.name)
+      os.unlink(rev.name)
       os.unlink(merged.name)
       os.unlink("%s.assembled.fastq" % merged.name)
       os.unlink("%s.discarded.fastq" % merged.name)
@@ -386,50 +386,50 @@ def main():
   else:
     sys.stderr.write("filtering reads...\n")
 
-    with open(os.path.join(options.output_dir, "left_reads.assigned.fastq"), "w") as l_assigned, \
-         open(os.path.join(options.output_dir, "right_reads.assigned.fastq"), "w") as r_assigned, \
-         open(os.path.join(options.output_dir, "left_reads.unassigned.fastq"), "w") as l_unassigned, \
-         open(os.path.join(options.output_dir, "right_reads.unassigned.fastq"), "w") as r_unassigned:
+    with open(os.path.join(options.output_dir, "fwd_reads.assigned.fastq"), "w") as f_assigned, \
+         open(os.path.join(options.output_dir, "rev_reads.assigned.fastq"), "w") as r_assigned, \
+         open(os.path.join(options.output_dir, "fwd_reads.unassigned.fastq"), "w") as f_unassigned, \
+         open(os.path.join(options.output_dir, "rev_reads.unassigned.fastq"), "w") as r_unassigned:
       total_reads = 0.0
       quality_reads = 0.0
 
       # extract read files
-      left = fetch_unzip(miseq_zip, pairs[args[1]][0])
-      right = fetch_unzip(miseq_zip, pairs[args[1]][1])
+      fwd = fetch_unzip(miseq_zip, pairs[args[1]][0])
+      rev = fetch_unzip(miseq_zip, pairs[args[1]][1])
   
-      # read through left and right fastq simultaneously
-      for l_read, r_read in izip(fast_fastq(open(left.name, "r")), fast_fastq(open(right.name, "r"))):
+      # read through foward and reverse fastq simultaneously
+      for f_read, r_read in izip(fast_fastq(open(fwd.name, "r")), fast_fastq(open(rev.name, "r"))):
         total_reads += 1
   
         # check that read passes quality filter
-        if qual_filter(l_read) == False or qual_filter(r_read) == False:
+        if qual_filter(f_read) == False or qual_filter(r_read) == False:
           continue
 
         quality_reads += 1
 
         # demultiplex
-        dm_out = demultiplex(l_read, left_bcs, right_bcs, r_read)
+        dm_out = demultiplex(f_read, fwd_bcs, rev_bcs, r_read)
  
         if dm_out == False:
           # strip pair info from read and write to unassigned file
-          l_read.id = l_read.id.split(" ")[0]
-          l_unassigned.write(l_read.raw())
+          f_read.id = f_read.id.split(" ")[0]
+          f_unassigned.write(f_read.raw())
 
           r_read.id = r_read.id.split(" ")[0]
           r_unassigned.write(r_read.raw())
         else:
           # rename reads to barcodes used and write to assigned file
-          l_read, r_read, l_bc, r_bc = dm_out
+          f_read, r_read, f_bc, r_bc = dm_out
 
-          bc_name = "%s_%s" % (l_bc, r_bc)
+          bc_name = "%s_%s" % (f_bc, r_bc)
 
           try:
             barcode_to_count[bc_name] += 1
           except KeyError:
             barcode_to_count[bc_name] = 1
 
-          l_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
-          l_assigned.write(l_read.raw())
+          f_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
+          f_assigned.write(f_read.raw())
   
           r_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
           r_assigned.write(r_read.raw())
