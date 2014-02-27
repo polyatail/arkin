@@ -51,7 +51,7 @@ def load_plate(plate_file):
 
   return sample_data
 
-def crunch(plate, fwd_bcs, rev_bcs):
+def map_bc_to_sample(plate, fwd_bcs, rev_bcs):
   barcode_to_sample = {}
 
   for sample in plate:
@@ -65,6 +65,101 @@ def crunch(plate, fwd_bcs, rev_bcs):
 
   return barcode_to_sample
 
+def writetable(table, out_fname):
+  taxa = list(set(sum([table[x].keys() for x in table], [])))
+
+  with open(os.path.join(options.output_dir, out_fname), "w") as fp:
+    fp.write("\t".join(["sample"] + taxa) + "\n")
+  
+    for sample in sorted(table.keys()):
+      row = [sample]
+  
+      for taxon in taxa:
+        try:
+          row.append(table[sample][taxon])
+        except KeyError:
+          row.append(0)
+  
+      fp.write("\t".join(map(str, row)) + "\n")
+
+def normalize(table, std_org):
+  new_table = {}
+
+  for sample in table:
+    new_table[sample] = {}
+
+    for taxon in table[sample]:
+      new_table[sample][taxon] = table[sample][taxon] / float(table[sample][std_org])
+
+  return new_table
+
+def percentages(table):
+  new_table = {}
+
+  for sample in table:
+    new_table[sample] = {}
+
+    for taxon in table[sample]:
+      new_table[sample][taxon] = table[sample][taxon] * 100 / float(sum(table[sample].values()))
+
+  return new_table
+
+def crunch(table, plate):
+  # contains actual vs expected values
+  data = {"standards": {},
+          "unknowns": {}}
+
+  for sample in plate:
+    if plate[sample]["type"].lower() == "empty":
+      #TODO: add some checks that the well actually is empty
+      continue
+    elif plate[sample]["type"].lower().startswith("unknown"):
+      std_name = plate[sample]["type"].split("_")[1]
+      #TODO: keep track of raw values
+      continue
+    elif plate[sample]["type"].lower().startswith("standard"):
+      std_name = plate[sample]["type"].split("_")[1]
+      expected = [x.split(":") for x in plate[sample]["expected"].split(",")]
+
+      try:
+        data["standards"][std_name]
+      except KeyError:
+        data["standards"][std_name] = {}
+
+      for orgname, expval in expected:
+        try:
+          actual = table[sample][orgname]
+        except KeyError:
+          actual = 0.0
+
+        try:
+          data["standards"][std_name][orgname]
+        except KeyError:
+          data["standards"][std_name][orgname] = {}
+
+        try:
+          data["standards"][std_name][orgname][float(expval)]
+        except KeyError: 
+          data["standards"][std_name][orgname][float(expval)] = []
+
+        data["standards"][std_name][orgname][float(expval)].append(actual)
+
+  #TODO: do regression (linear??) and quantitate unknowns
+
+  # write data for plotting
+  with open(os.path.join(options.output_dir, "plot_titles.txt"), "w") as titles_fp, \
+       open(os.path.join(options.output_dir, "plot_data.txt"), "w") as data_fp:
+    for std_name in data["standards"]:
+      for org_name in data["standards"][std_name]:
+        header, row = [], []
+  
+        for expval, actval in data["standards"][std_name][org_name].items():
+          header.extend([expval] * len(actval))
+          row.extend(actval)
+ 
+        titles_fp.write("Standard '%s': %s\n" % (std_name, org_name)) 
+        data_fp.write("%s\n%s\n" % ("\t".join(map(str, header)), "\t".join(map(str, row))))
+
 def parse_options(arguments):
   global options, args
 
@@ -76,6 +171,12 @@ def parse_options(arguments):
                     metavar="[./]",
                     default="./",
                     help="write output files to this directory")
+
+  parser.add_option("--std-org",
+                    dest="std_org",
+                    metavar="[10F2]",
+                    default=False,
+                    help="divide samples by counts for this organism")
 
   options, args = parser.parse_args(arguments)
 
@@ -99,6 +200,9 @@ def parse_options(arguments):
     parser.print_help()
     sys.exit(1)
 
+  if not options.std_org:
+    print "Warning: Will not normalize or generate plots without --std-org"
+
 def main():
   parse_options(sys.argv[1:])
 
@@ -116,10 +220,10 @@ def main():
   plate = load_plate(args[2])
 
   # map barcodes to samples
-  barcode_to_sample = crunch(plate, fwd_bcs, rev_bcs)
+  barcode_to_sample = map_bc_to_sample(plate, fwd_bcs, rev_bcs)
 
+  # generate table
   table = dict([(x, {}) for x in barcode_to_sample.values()])
-  taxa = set()
  
   for l in open(args[0], "r"):
     l = l.strip().split("\t")
@@ -131,28 +235,21 @@ def main():
     except KeyError:
       continue
 
-    taxa.add(l[1])
-
     try:
       table[sample][l[1]] += 1
     except KeyError:
       table[sample][l[1]] = 1
 
-  with open(os.path.join(options.output_dir, "tally.txt"), "w") as fp:
-    taxa_order = list(taxa)
-  
-    fp.write("\t".join(["sample"] + taxa_order) + "\n")
-  
-    for sample in sorted(table.keys()):
-      row = [sample]
-  
-      for taxon in taxa_order:
-        try:
-          row.append(table[sample][taxon])
-        except KeyError:
-          row.append(0)
-  
-      fp.write("\t".join(map(str, row)) + "\n")
+  writetable(table, "tally.txt")
+
+  if options.std_org:
+    normalized_table = normalize(table, options.std_org)
+    writetable(normalized_table, "tally.normalized.txt")
+
+    percentage_table = percentages(normalized_table) 
+    writetable(percentage_table, "tally.percentages.txt")
+
+    crunch(percentage_table, plate)
 
 if __name__ == "__main__":
   main()
