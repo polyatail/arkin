@@ -1,3 +1,4 @@
+#!/usr/bin/Rscript
 png(filename="plots.png", width=2000, height=2000, res=200)
 
 par(mfrow=c(4,3))
