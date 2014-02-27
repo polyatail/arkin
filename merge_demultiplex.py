@@ -109,10 +109,12 @@ def match_bc(read, bcs):
   # greedy barcode matching algorithm returns first barcode with a match
   # hamming distance <= max mismatches away
 
+  offset = 0
+
   for barcode in bcs:
-    if hamming_dist(read[i:i+len(barcode)], barcode) <= options.max_mismatch:
+    if hamming_dist(read[offset:offset+len(barcode)], barcode) <= options.max_mismatch:
       # barcode match
-      return (i, barcode)
+      return (offset, barcode)
   else:
     return False
 
@@ -341,7 +343,7 @@ def main():
           unassigned.write(merged_read.raw())
         else:
           # rename read to barcodes used and write to assigned file
-          f_read, r_read, f_bc, r_bc = dm_out
+          trimmed_read, _, f_bc, r_bc = dm_out
 
           bc_name = "%s_%s" % (f_bc, r_bc)
 
@@ -350,8 +352,8 @@ def main():
           except KeyError:
             barcode_to_count[bc_name] = 1
 
-          f_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
-          assigned.write(f_read.raw())
+          trimmed_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
+          assigned.write(trimmed_read.raw())
   
       # remove temporary files
       os.unlink(fwd.name)
@@ -411,7 +413,7 @@ def main():
           r_unassigned.write(r_read.raw())
         else:
           # rename reads to barcodes used and write to assigned file
-          f_read, r_read, f_bc, r_bc = dm_out
+          trimmed_f_read, trimmed_r_read, f_bc, r_bc = dm_out
 
           bc_name = "%s_%s" % (f_bc, r_bc)
 
@@ -420,11 +422,11 @@ def main():
           except KeyError:
             barcode_to_count[bc_name] = 1
 
-          f_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
-          f_assigned.write(f_read.raw())
+          trimmed_f_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
+          f_assigned.write(trimmed_f_read.raw())
   
-          r_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
-          r_assigned.write(r_read.raw())
+          trimmed_r_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
+          r_assigned.write(trimmed_r_read.raw())
 
       if total_reads > 0:
         if quality_reads / total_reads < options.min_qual_perc:
