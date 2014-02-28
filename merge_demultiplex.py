@@ -10,6 +10,7 @@ from optparse import OptionParser, OptionGroup
 from numpy import mean
 from itertools import izip
 from fastq import fast_fastq
+from string import maketrans, translate
 import sys
 import time
 import os
@@ -21,6 +22,8 @@ import zipfile
 PATH_TO_PEAR = "pear"
 
 hamming_dist = lambda a, b: sum([1 for x, y in zip(a, b) if x != y])
+revcomp_trans = maketrans("ATGCN", "TACGN")
+revcomp = lambda x: translate(x[::-1], revcomp_trans)
 
 def fetch_unzip(zipfile_obj, filename):
   # accepts zipfile object and filename contained within, returns
@@ -126,7 +129,7 @@ def demultiplex(fastq_fwd, fwd_bcs, rev_bcs, fastq_rev = None):
 
   if fastq_rev == None:
     # merged read
-    rev_match = match_bc(fastq_fwd.sequence[::-1], rev_bcs)
+    rev_match = match_bc(revcomp(fastq_fwd.sequence), rev_bcs)
   else:
     rev_match = match_bc(fastq_rev.sequence, rev_bcs)
 
@@ -326,10 +329,10 @@ def main():
         # keep track of stats
         quality_reads += 1
 
-        if len(merged_read.sequence) < min_read_length:
+        if len(merged_read.sequence) < min_quality_read_length:
           min_quality_read_length = len(merged_read.sequence)
 
-        if len(merged_read.sequence) > max_read_length:
+        if len(merged_read.sequence) > max_quality_read_length:
           max_quality_read_length = len(merged_read.sequence)
   
         total_quality_read_length += len(merged_read.sequence)

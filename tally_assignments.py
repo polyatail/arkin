@@ -201,7 +201,7 @@ def parse_options(arguments):
     sys.exit(1)
 
   if not options.std_org:
-    print "Warning: Will not normalize or generate plots without --std-org"
+    print "Warning: Will not normalize without --std-org"
 
 def main():
   parse_options(sys.argv[1:])
@@ -246,10 +246,10 @@ def main():
     normalized_table = normalize(table, options.std_org)
     writetable(normalized_table, "tally.normalized.txt")
 
-    percentage_table = percentages(normalized_table) 
-    writetable(percentage_table, "tally.percentages.txt")
+  percentage_table = percentages(table) 
+  writetable(percentage_table, "tally.percentages.txt")
 
-    crunch(percentage_table, plate)
+  crunch(percentage_table, plate)
 
 if __name__ == "__main__":
   main()

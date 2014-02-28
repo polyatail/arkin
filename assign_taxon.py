@@ -183,7 +183,7 @@ def main():
     sys.stderr.write("\nSummary")
     sys.stderr.write("\n  Total reads:       %d" % merged_fasta.read_count)
     sys.stderr.write("\n  Aligned reads:     %d" % aligned_reads)
-    sys.stderr.write("\n  Unaligned reads:   %d" % (total_reads - aligned_reads))
+    sys.stderr.write("\n  Unaligned reads:   %d" % (merged_fasta.read_count - aligned_reads))
   else:
     sys.stderr.write("Converting forward reads to FASTA...\n")
     fwd_fasta = fastq_to_fasta(options.fwd_fname)
