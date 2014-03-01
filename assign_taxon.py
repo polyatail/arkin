@@ -44,6 +44,10 @@ def parse_usearch(fwd_b6, rev_b6, out_fname, merged_b6 = False):
          open(out_fname, "w") as out_fp:
       for l in in_fp:
         l = l.strip().split("\t")
+
+        # can be multiple 16S sequences per taxon, e.g. 10F2_1 and 10F2_2
+        l[1] = "_".join(l[1].rsplit("_", 1)[0])
+
         out_fp.write("%s\t%s\n" % tuple(l[:2]))
         count += 1
 
@@ -58,6 +62,10 @@ def parse_usearch(fwd_b6, rev_b6, out_fname, merged_b6 = False):
       for f_l, r_l in izip(fwd_fp, rev_fp):
         f_l = f_l.strip().split("\t")
         r_l = r_l.strip().split("\t")
+
+        # can be multiple 16S sequences per taxon, e.g. 10F2_1 and 10F2_2
+        f_l[1] = "_".join(f_l[1].rsplit("_", 1)[0])
+        r_l[1] = "_".join(r_l[1].rsplit("_", 1)[0])
 
         try:
           # reverse read matches forward read
@@ -174,10 +182,13 @@ def main():
     sys.exit(1)
 
   if options.merged_fname:
+    sys.stderr.write("Converting merged reads to FASTA...\n")
     merged_fasta = fastq_to_fasta(options.merged_fname)
     merged_b6 = os.path.join(options.output_dir, "merged_reads.usearch.b6")
+    sys.stderr.write("Running USEARCH on merged reads...\n\n")
     usearch(merged_fasta.name, merged_b6)
 
+    sys.stderr.write("Parsing USEARCH results...\n")
     aligned_reads = parse_usearch(False, False, os.path.join(options.output_dir, "assigned_taxa.txt"), merged_b6)
 
     sys.stderr.write("\nSummary")
@@ -188,13 +199,13 @@ def main():
     sys.stderr.write("Converting forward reads to FASTA...\n")
     fwd_fasta = fastq_to_fasta(options.fwd_fname)
     fwd_b6 = os.path.join(options.output_dir, "fwd_reads.usearch.b6")
-    sys.stderr.write("Running USEARCH on forward reads...\n")
+    sys.stderr.write("Running USEARCH on forward reads...\n\n")
     usearch(fwd_fasta.name, fwd_b6)
 
     sys.stderr.write("Converting reverse reads to FASTA...\n")
     rev_fasta = fastq_to_fasta(options.rev_fname)
     rev_b6 = os.path.join(options.output_dir, "rev_reads.usearch.b6")
-    sys.stderr.write("Running USEARCH on reverse reads...\n")
+    sys.stderr.write("Running USEARCH on reverse reads...\n\n")
     usearch(rev_fasta.name, rev_b6)
 
     sys.stderr.write("Parsing USEARCH results...\n")

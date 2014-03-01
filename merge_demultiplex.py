@@ -148,10 +148,25 @@ def demultiplex(fastq_fwd, fwd_bcs, rev_bcs, fastq_rev = None):
     return (fastq_fwd, fastq_rev, fwd_match[1], rev_match[1])
 
 def qual_filter(read):
-  if mean([ord(x) - options.phred_offset for x in read.quals]) < options.min_qual:
-    return False
+  votes = []
+
+  if options.min_qual:
+    if mean([ord(x) - options.phred_offset for x in read.quals]) < options.min_qual:
+      votes.append(False)
+    else:
+      votes.append(True)
   else:
-    return True
+    votes.append(True)
+
+  if options.max_errors:
+    if sum([10 ** -((ord(x) - options.phred_offset)/10.0) for x in read.quals]) > options.max_errors:
+      votes.append(False)
+    else:
+      votes.append(True)
+  else:
+    votes.append(True)
+
+  return reduce(lambda x, y: x & y, votes)
 
 def load_barcodes(bc_file):
   fwd_bcs = {}
@@ -201,12 +216,19 @@ def parse_options(arguments):
                     default="1G",
                     help="amount of memory to use during read merging")
 
-  parser.add_option("-q",
+  parser.add_option("--mean-qual",
                     dest="min_qual",
                     type="int",
                     metavar="[25]",
-                    default=25,
+                    default=False,
                     help="discard reads with mean quality below this value")
+
+  parser.add_option("--max-errors",
+                    dest="max_errors",
+                    type="float",
+                    metavar="[2]",
+                    default=False,
+                    help="discard reads with more than this many expected errors")
 
   parser.add_option("--max-mismatch",
                     dest="max_mismatch",
@@ -272,6 +294,9 @@ def parse_options(arguments):
     parser.print_help()
     sys.exit(1)
 
+  if not (options.min_qual or options.max_errors):
+    print "Warning: Specify --min-qual or --max-errors to enable quality filtering"
+
 def main():
   parse_options(sys.argv[1:])
 
@@ -297,8 +322,6 @@ def main():
   barcode_to_count = {}
 
   if options.merge:
-    sys.stderr.write("Merging reads...\n")
-
     with open(os.path.join(options.output_dir, "merged_reads.assigned.fastq"), "w") as assigned, \
          open(os.path.join(options.output_dir, "merged_reads.unassigned.fastq"), "w") as unassigned:
       min_quality_read_length = 1e10
@@ -309,16 +332,21 @@ def main():
       quality_reads = 0.0
 
       # extract read files
+      sys.stderr.write("Extracting reads from zipfile...\n")
+
       fwd = fetch_unzip(miseq_zip, pairs[args[1]][0])
       rev = fetch_unzip(miseq_zip, pairs[args[1]][1])
   
       # run pear to merge reads
+      sys.stderr.write("Merging reads...\n")
       merged, stats = pear(fwd.name, rev.name)
   
       if stats["assembled_reads"] < options.min_merged_perc:
         sys.stderr.write("  Warning: only %.02f%% of reads assembled\n" % stats["assembled_reads"])
   
       # read through fastq
+      sys.stderr.write("Filtering and demultiplexing reads...\n")
+
       for merged_read in fast_fastq(open("%s.assembled.fastq" % merged.name, "r")):
         total_reads += 1
   
@@ -369,7 +397,7 @@ def main():
   
       if total_reads > 0:
         if quality_reads / total_reads < options.min_qual_perc:
-          sys.stderr.write("  Warning: only %.02f%% of reads passed quality filter (mean(qv) > %s)\n" % (quality_reads * 100 / total_reads, options.min_qual))
+          sys.stderr.write("  Warning: only %.02f%% of reads passed quality filter\n" % (quality_reads * 100 / total_reads))
 
       sys.stderr.write("\nSummary")
       sys.stderr.write("\n  Total reads:       %d" % total_reads)
@@ -381,8 +409,6 @@ def main():
       sys.stderr.write("\n  Unassigned reads:  %d" % quality_reads - sum(barcode_to_count.values()))
       sys.stderr.write("\n  Avg reads/barcode: %d\n" % mean(barcode_to_count.values()))
   else:
-    sys.stderr.write("Filtering reads...\n")
-
     with open(os.path.join(options.output_dir, "fwd_reads.assigned.fastq"), "w") as f_assigned, \
          open(os.path.join(options.output_dir, "rev_reads.assigned.fastq"), "w") as r_assigned, \
          open(os.path.join(options.output_dir, "fwd_reads.unassigned.fastq"), "w") as f_unassigned, \
@@ -391,10 +417,14 @@ def main():
       quality_reads = 0.0
 
       # extract read files
+      sys.stderr.write("Extracting reads from zipfile...\n")
+
       fwd = fetch_unzip(miseq_zip, pairs[args[1]][0])
       rev = fetch_unzip(miseq_zip, pairs[args[1]][1])
   
       # read through foward and reverse fastq simultaneously
+      sys.stderr.write("Filtering and demultiplexing reads...\n")
+
       for f_read, r_read in izip(fast_fastq(open(fwd.name, "r")), fast_fastq(open(rev.name, "r"))):
         total_reads += 1
   
@@ -433,7 +463,7 @@ def main():
 
       if total_reads > 0:
         if quality_reads / total_reads < options.min_qual_perc:
-          sys.stderr.write("  Warning: only %.02f%% of reads passed quality filter (mean(qv) > %s)\n" % (quality_reads * 100 / total_reads, options.min_qual))
+          sys.stderr.write("  Warning: only %.02f%% of reads passed quality filter\n" % (quality_reads * 100 / total_reads))
 
       sys.stderr.write("\nSummary")
       sys.stderr.write("\n  Total reads:       %d" % total_reads)
