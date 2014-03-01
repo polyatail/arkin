@@ -112,7 +112,7 @@ def match_bc(read, bcs):
   # greedy barcode matching algorithm returns first barcode with a match
   # hamming distance <= max mismatches away
 
-  offset = 0
+  offset = options.bc_offset
 
   for barcode in bcs:
     if hamming_dist(read[offset:offset+len(barcode)], barcode) <= options.max_mismatch:
@@ -194,8 +194,13 @@ def load_barcodes(bc_file):
 def parse_options(arguments):
   global options, args
 
-  parser = OptionParser(usage="%prog [options] <miseq_fastq.zip> <sample_name> <barcodes.txt>",
+  parser = OptionParser(usage="%prog [options] <-f/-r/-m/-z/-s filename> <barcodes.txt>",
                         version="%prog " + str(__version__))
+
+  group1 = OptionGroup(parser, "Input Files")
+  group2 = OptionGroup(parser, "Demultiplexing")
+  group3 = OptionGroup(parser, "Read Merging")
+  group4 = OptionGroup(parser, "Quality Filtering")
 
   parser.add_option("-o",
                     dest="output_dir",
@@ -210,63 +215,105 @@ def parse_options(arguments):
                     default=1,
                     help="number of threads used during analysis")
 
-  parser.add_option("-m",
+  parser.add_option("--mem",
                     dest="mem_size",
                     metavar="[1G]",
                     default="1G",
                     help="amount of memory to use during read merging")
 
-  parser.add_option("--mean-qual",
-                    dest="min_qual",
-                    type="int",
-                    metavar="[25]",
+  group1.add_option("-f",
+                    dest="fwd_fname",
+                    type="str",
                     default=False,
-                    help="discard reads with mean quality below this value")
+                    help="path to FASTQ containing forward reads")
 
-  parser.add_option("--max-errors",
-                    dest="max_errors",
-                    type="float",
-                    metavar="[2]",
+  group1.add_option("-r",
+                    dest="rev_fname",
+                    type="str",
                     default=False,
-                    help="discard reads with more than this many expected errors")
+                    help="path to FASTQ containing reverse reads")
 
-  parser.add_option("--max-mismatch",
+  group1.add_option("-m",
+                    dest="merged_fname",
+                    type="str",
+                    default=False,
+                    help="path to FASTQ containing merged reads")
+
+  group1.add_option("-z",
+                    dest="zip_fname",
+                    type="str",
+                    default=False,
+                    help="path to zipfile from BaseSpace")
+
+  group1.add_option("-s",
+                    dest="sample_name",
+                    type="str",
+                    default=False,
+                    help="name of sample within BaseSpace zipfile")
+
+  group2.add_option("--max-mismatch",
                     dest="max_mismatch",
                     type="int",
                     metavar="[2]",
                     default=2,
                     help="maximum allowed mismatches in barcodes")
 
-  parser.add_option("--merge",
+  group2.add_option("--bc-offset",
+                    dest="bc_offset",
+                    type="int",
+                    metavar="[0]",
+                    default=0,
+                    help="fixed barcode location within read")
+
+  group3.add_option("--merge",
                     dest="merge",
                     action="store_true",
                     default=False,
                     help="merge forward and reverse reads with PEAR")
 
-  parser.add_option("--phred_offset",
-                    dest="phred_offset",
-                    type="int",
-                    metavar="[33]",
-                    default=33,
-                    help="phred quality offset (default 33 for illumina 1.8+)")
-
-  parser.add_option("--min-qual-perc",
-                    dest="min_qual_perc",
-                    type="int",
-                    metavar="[95]",
-                    default=95,
-                    help="warn if fewer than this % of reads pass quality filter")
-
-  parser.add_option("--min-merged-perc",
+  group3.add_option("--min-merged-perc",
                     dest="min_merged_perc",
                     type="int",
                     metavar="[95]",
                     default=95,
                     help="warn if fewer than this % of reads can be merged")
 
+  group4.add_option("--phred_offset",
+                    dest="phred_offset",
+                    type="int",
+                    metavar="[33]",
+                    default=33,
+                    help="phred quality offset (default 33 for illumina 1.8+)")
+
+  group4.add_option("--mean-qual",
+                    dest="min_qual",
+                    type="int",
+                    metavar="[25]",
+                    default=False,
+                    help="discard reads with mean quality below this value")
+
+  group4.add_option("--max-errors",
+                    dest="max_errors",
+                    type="float",
+                    metavar="[2]",
+                    default=False,
+                    help="discard reads with more than this many expected errors")
+
+  group4.add_option("--min-qual-perc",
+                    dest="min_qual_perc",
+                    type="int",
+                    metavar="[95]",
+                    default=95,
+                    help="warn if fewer than this % of reads pass quality filter")
+
+  parser.add_option_group(group1)
+  parser.add_option_group(group2)
+  parser.add_option_group(group3)
+  parser.add_option_group(group4)
+
   options, args = parser.parse_args(arguments)
 
-  if len(args) <> 3:
+  if len(args) <> 1:
     print "Error: Incorrect number of arguments"
     parser.print_help()
     sys.exit(1)
@@ -284,12 +331,40 @@ def parse_options(arguments):
   options.min_merged_perc /= 100.0
   options.min_qual_perc /= 100.0
 
-  if not os.path.isfile(args[0]):
-    print "Error: Specified sequencing zip file does not exist"
+  if options.merged_fname and \
+     (options.zip_fname or options.sample_name) and \
+     (options.fwd_fname or options.rev_fname):
+    print "Error: Options -m and -z/-s and -f/-r are mutually exclusive"
+    parser.print_help()
+    sys.exit(1)
+  elif not (options.merged_fname or options.zip_fname or \
+            options.sample_name or options.fwd_fname or \
+            options.rev_fname):
+    print "Error: Must specify either -m, -z/-s, or -f/-r"
+    parser.print_help()
+    sys.exit(1)
+  elif bool(options.fwd_fname) ^ bool(options.rev_fname):
+    print "Error: When using -f or -r, both must be specified"
+    parser.print_help()
+    sys.exit(1)
+  elif bool(options.zip_fname) ^ bool(options.sample_name):
+    print "Error: When using -z or -s, both must be specified"
     parser.print_help()
     sys.exit(1)
 
-  if not os.path.isfile(args[2]):
+  if options.merged_fname and options.merge:
+    print "Error: Option --merge doesn't make sense with -m"
+    parser.print_help()
+    sys.exit(1)
+
+  for fname in (options.zip_fname, options.fwd_fname, options.rev_fname, options.merged_fname):
+    if fname != False and \
+       not os.path.isfile(fname):
+      print "Error: Specified FASTQ or zip file (%s) does not exist" % fname
+      parser.print_help()
+      sys.exit(1)
+
+  if not os.path.isfile(args[0]):
     print "Error: Specified barcode file does not exist"
     parser.print_help()
     sys.exit(1)
@@ -308,20 +383,30 @@ def main():
     sys.exit(1)
 
   # load barcodes
-  fwd_bcs, rev_bcs = load_barcodes(args[2])
+  fwd_bcs, rev_bcs = load_barcodes(args[0])
+  
+  if options.zip_fname:
+    # open zipfile
+    miseq_zip = zipfile.ZipFile(options.zip_fname)
+  
+    # find pairs
+    pairs = dict([("_".join(x.split("/")[-1].split(".")[0].split("_")[:-2]), (x, y)) for x, y in find_pairs(miseq_zip)])
+  
+    if options.sample_name not in pairs:
+      raise ValueError("Could not find %s in %s!" % (options.sample_name, options.zip_fname))
 
-  # open zipfile
-  miseq_zip = zipfile.ZipFile(args[0])
+    # extract read files
+    sys.stderr.write("Extracting reads from zipfile...\n")
 
-  # find pairs
-  pairs = dict([("_".join(x.split("/")[-1].split(".")[0].split("_")[:-2]), (x, y)) for x, y in find_pairs(miseq_zip)])
-
-  if args[1] not in pairs:
-    raise ValueError("Could not find %s in %s!" % (args[1], args[0]))
-
+    fwd = fetch_unzip(miseq_zip, pairs[options.sample_name][0])
+    rev = fetch_unzip(miseq_zip, pairs[options.sample_name][1])
+  elif options.fwd_fname and options.rev_fname:
+    fwd = open(options.fwd_fname, "r")
+    rev = open(options.rev_fname, "r")
+  
   barcode_to_count = {}
 
-  if options.merge:
+  if options.merge or options.merged_fname:
     with open(os.path.join(options.output_dir, "merged_reads.assigned.fastq"), "w") as assigned, \
          open(os.path.join(options.output_dir, "merged_reads.unassigned.fastq"), "w") as unassigned:
       min_quality_read_length = 1e10
@@ -331,23 +416,22 @@ def main():
       total_reads = 0.0
       quality_reads = 0.0
 
-      # extract read files
-      sys.stderr.write("Extracting reads from zipfile...\n")
+      if options.merge:
+        # run pear to merge reads
+        sys.stderr.write("Merging reads...\n")
+        merged, stats = pear(fwd.name, rev.name)
+  
+        if stats["assembled_reads"] < options.min_merged_perc:
+          sys.stderr.write("  Warning: only %.02f%% of reads assembled\n" % stats["assembled_reads"])
 
-      fwd = fetch_unzip(miseq_zip, pairs[args[1]][0])
-      rev = fetch_unzip(miseq_zip, pairs[args[1]][1])
-  
-      # run pear to merge reads
-      sys.stderr.write("Merging reads...\n")
-      merged, stats = pear(fwd.name, rev.name)
-  
-      if stats["assembled_reads"] < options.min_merged_perc:
-        sys.stderr.write("  Warning: only %.02f%% of reads assembled\n" % stats["assembled_reads"])
+        merged_fastq = fast_fastq(open("%s.assembled.fastq" % merged.name, "r"))
+      elif options.merged_fname:
+        merged_fastq = fast_fastq(open(merged_fname, "r"))
   
       # read through fastq
       sys.stderr.write("Filtering and demultiplexing reads...\n")
 
-      for merged_read in fast_fastq(open("%s.assembled.fastq" % merged.name, "r")):
+      for merged_read in merged_fastq:
         total_reads += 1
   
         # check that read passes quality filter
@@ -386,15 +470,6 @@ def main():
           trimmed_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
           assigned.write(trimmed_read.raw())
   
-      # remove temporary files
-      os.unlink(fwd.name)
-      os.unlink(rev.name)
-      os.unlink(merged.name)
-      os.unlink("%s.assembled.fastq" % merged.name)
-      os.unlink("%s.discarded.fastq" % merged.name)
-      os.unlink("%s.unassembled.forward.fastq" % merged.name)
-      os.unlink("%s.unassembled.reverse.fastq" % merged.name)
-  
       if total_reads > 0:
         if quality_reads / total_reads < options.min_qual_perc:
           sys.stderr.write("  Warning: only %.02f%% of reads passed quality filter\n" % (quality_reads * 100 / total_reads))
@@ -408,6 +483,14 @@ def main():
       sys.stderr.write("\n  Assigned reads:    %d" % sum(barcode_to_count.values()))
       sys.stderr.write("\n  Unassigned reads:  %d" % quality_reads - sum(barcode_to_count.values()))
       sys.stderr.write("\n  Avg reads/barcode: %d\n" % mean(barcode_to_count.values()))
+
+      if options.merge:
+        # remove temporary files
+        os.unlink(merged.name)
+        os.unlink("%s.assembled.fastq" % merged.name)
+        os.unlink("%s.discarded.fastq" % merged.name)
+        os.unlink("%s.unassembled.forward.fastq" % merged.name)
+        os.unlink("%s.unassembled.reverse.fastq" % merged.name)
   else:
     with open(os.path.join(options.output_dir, "fwd_reads.assigned.fastq"), "w") as f_assigned, \
          open(os.path.join(options.output_dir, "rev_reads.assigned.fastq"), "w") as r_assigned, \
@@ -415,12 +498,6 @@ def main():
          open(os.path.join(options.output_dir, "rev_reads.unassigned.fastq"), "w") as r_unassigned:
       total_reads = 0.0
       quality_reads = 0.0
-
-      # extract read files
-      sys.stderr.write("Extracting reads from zipfile...\n")
-
-      fwd = fetch_unzip(miseq_zip, pairs[args[1]][0])
-      rev = fetch_unzip(miseq_zip, pairs[args[1]][1])
   
       # read through foward and reverse fastq simultaneously
       sys.stderr.write("Filtering and demultiplexing reads...\n")
@@ -471,6 +548,11 @@ def main():
       sys.stderr.write("\n  Assigned reads:    %d" % sum(barcode_to_count.values()))
       sys.stderr.write("\n  Unassigned reads:  %d" % (quality_reads - sum(barcode_to_count.values())))
       sys.stderr.write("\n  Avg reads/barcode: %d\n" % mean(barcode_to_count.values()))
+
+  # remove temporary files
+  if options.zip_fname:
+    os.unlink(fwd.name)
+    os.unlink(rev.name)
 
 if __name__ == "__main__":
   main()
