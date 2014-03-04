@@ -426,7 +426,7 @@ def main():
 
         merged_fastq = fast_fastq(open("%s.assembled.fastq" % merged.name, "r"))
       elif options.merged_fname:
-        merged_fastq = fast_fastq(open(merged_fname, "r"))
+        merged_fastq = fast_fastq(open(options.merged_fname, "r"))
   
       # read through fastq
       sys.stderr.write("Filtering and demultiplexing reads...\n")
