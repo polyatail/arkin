@@ -64,8 +64,8 @@ def parse_usearch(fwd_b6, rev_b6, out_fname, merged_b6 = False):
         r_l = r_l.strip().split("\t")
 
         # can be multiple 16S sequences per taxon, e.g. 10F2_1 and 10F2_2
-        f_l[1] = "_".join(f_l[1].rsplit("_", 1)[0])
-        r_l[1] = "_".join(r_l[1].rsplit("_", 1)[0])
+        f_l[1] = f_l[1].rsplit("_", 1)[0]
+        r_l[1] = r_l[1].rsplit("_", 1)[0]
 
         try:
           # reverse read matches forward read
