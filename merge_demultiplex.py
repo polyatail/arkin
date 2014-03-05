@@ -543,11 +543,11 @@ def main():
           sys.stderr.write("  Warning: only %.02f%% of reads passed quality filter\n" % (quality_reads * 100 / total_reads))
 
       sys.stderr.write("\nSummary")
-      sys.stderr.write("\n  Total reads:       %d" % total_reads)
-      sys.stderr.write("\n  Quality reads:     %d" % quality_reads)
-      sys.stderr.write("\n  Assigned reads:    %d" % sum(barcode_to_count.values()))
-      sys.stderr.write("\n  Unassigned reads:  %d" % (quality_reads - sum(barcode_to_count.values())))
-      sys.stderr.write("\n  Avg reads/barcode: %d\n" % mean(barcode_to_count.values()))
+      sys.stderr.write("\n  Total pairs:       %d" % total_reads)
+      sys.stderr.write("\n  Quality pairs:     %d" % quality_reads)
+      sys.stderr.write("\n  Assigned pairs:    %d" % sum(barcode_to_count.values()))
+      sys.stderr.write("\n  Unassigned pairs:  %d" % (quality_reads - sum(barcode_to_count.values())))
+      sys.stderr.write("\n  Avg pairs/barcode: %d\n" % mean(barcode_to_count.values()))
 
   # remove temporary files
   if options.zip_fname:
