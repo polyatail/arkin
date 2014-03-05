@@ -288,15 +288,15 @@ def parse_options(arguments):
   if not options.std_org:
     print "Warning: Will not normalize without --std-org"
 
-def main():
-  parse_options(sys.argv[1:])
-
   if not os.path.exists(options.output_dir):
     os.mkdir(options.output_dir)
   elif not os.path.isdir(options.output_dir):
     print "Error: Specified path exists and is not a directory"
     parser.print_help()
     sys.exit(1)
+
+def main():
+  parse_options(sys.argv[1:])
 
   # load barcodes
   fwd_bcs, rev_bcs = load_barcodes(args[1])

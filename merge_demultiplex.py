@@ -372,15 +372,15 @@ def parse_options(arguments):
   if not (options.min_qual or options.max_errors):
     print "Warning: Specify --min-qual or --max-errors to enable quality filtering"
 
-def main():
-  parse_options(sys.argv[1:])
-
   if not os.path.exists(options.output_dir):
     os.mkdir(options.output_dir)
   elif not os.path.isdir(options.output_dir):
     print "Error: Specified path exists and is not a directory"
     parser.print_help()
     sys.exit(1)
+
+def main():
+  parse_options(sys.argv[1:])
 
   # load barcodes
   fwd_bcs, rev_bcs = load_barcodes(args[0])

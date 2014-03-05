@@ -171,15 +171,15 @@ def parse_options(arguments):
 
   options.identity /= 100.0
 
-def main():
-  parse_options(sys.argv[1:])
-
   if not os.path.exists(options.output_dir):
     os.mkdir(options.output_dir)
   elif not os.path.isdir(options.output_dir):
     print "Error: Specified path exists and is not a directory"
     parser.print_help()
     sys.exit(1)
+
+def main():
+  parse_options(sys.argv[1:])
 
   if options.merged_fname:
     sys.stderr.write("Converting merged reads to FASTA...\n")
