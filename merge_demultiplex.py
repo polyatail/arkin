@@ -204,8 +204,8 @@ def parse_options(arguments):
 
   parser.add_option("-o",
                     dest="output_dir",
-                    metavar="[./]",
-                    default="./",
+                    metavar="[./reads]",
+                    default="./reads",
                     help="write output files to this directory")
 
   parser.add_option("-p",

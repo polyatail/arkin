@@ -240,8 +240,8 @@ def parse_options(arguments):
 
   parser.add_option("-o",
                     dest="output_dir",
-                    metavar="[./]",
-                    default="./",
+                    metavar="[./tables_figs]",
+                    default="./tables_figs",
                     help="write output files to this directory")
 
   parser.add_option("--rarefaction",
