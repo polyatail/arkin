@@ -182,33 +182,33 @@ def main():
   parse_options(sys.argv[1:])
 
   if options.merged_fname:
-    sys.stderr.write("Converting merged reads to FASTA...\n")
+    sys.stderr.write("Converting merged reads to FASTA...")
     merged_fasta = fastq_to_fasta(options.merged_fname)
     merged_b6 = os.path.join(options.output_dir, "merged_reads.usearch.b6")
-    sys.stderr.write("Running USEARCH on merged reads...\n\n")
+    sys.stderr.write("\nRunning USEARCH on merged reads...")
     usearch(merged_fasta.name, merged_b6)
 
-    sys.stderr.write("Parsing USEARCH results...\n")
+    sys.stderr.write("\n\nParsing USEARCH results...")
     aligned_reads = parse_usearch(False, False, os.path.join(options.output_dir, "assigned_taxa.txt"), merged_b6)
 
-    sys.stderr.write("\nSummary")
+    sys.stderr.write("\n\nSummary")
     sys.stderr.write("\n  Total reads:       %d" % merged_fasta.read_count)
     sys.stderr.write("\n  Aligned reads:     %d" % aligned_reads)
     sys.stderr.write("\n  Unaligned reads:   %d\n" % (merged_fasta.read_count - aligned_reads))
   else:
-    sys.stderr.write("Converting forward reads to FASTA...\n")
+    sys.stderr.write("Converting forward reads to FASTA...")
     fwd_fasta = fastq_to_fasta(options.fwd_fname)
     fwd_b6 = os.path.join(options.output_dir, "fwd_reads.usearch.b6")
-    sys.stderr.write("Running USEARCH on forward reads...\n\n")
+    sys.stderr.write("\nRunning USEARCH on forward reads...")
     usearch(fwd_fasta.name, fwd_b6)
 
-    sys.stderr.write("Converting reverse reads to FASTA...\n")
+    sys.stderr.write("\n\nConverting reverse reads to FASTA...")
     rev_fasta = fastq_to_fasta(options.rev_fname)
     rev_b6 = os.path.join(options.output_dir, "rev_reads.usearch.b6")
-    sys.stderr.write("Running USEARCH on reverse reads...\n\n")
+    sys.stderr.write("\nRunning USEARCH on reverse reads...")
     usearch(rev_fasta.name, rev_b6)
 
-    sys.stderr.write("Parsing USEARCH results...\n")
+    sys.stderr.write("\n\nParsing USEARCH results...")
     fwd_discord, rev_discord, aligned_pairs = parse_usearch(fwd_b6, rev_b6, os.path.join(options.output_dir, "assigned_taxa.txt"))
 
     total_reads = fwd_fasta.read_count + rev_fasta.read_count
@@ -216,7 +216,7 @@ def main():
     discordant_pairs = set(fwd_discord.keys()).intersection(rev_discord.keys())
     orphaned_reads = set(fwd_discord.keys()).symmetric_difference(rev_discord.keys())
 
-    sys.stderr.write("\nSummary")
+    sys.stderr.write("\n\nSummary")
     sys.stderr.write("\n  Total reads:       %d" % total_reads)
     sys.stderr.write("\n  Aligned reads:     %d" % aligned_reads)
     sys.stderr.write("\n  Unaligned reads:   %d\n" % (total_reads - aligned_reads))
