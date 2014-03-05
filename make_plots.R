@@ -1,6 +1,11 @@
 #!/usr/bin/Rscript
 
 for (suffix in c(".percentages", ".log2")) {
+  if (!file.exists(paste("plot_titles", suffix, ".txt", sep="")))
+  {
+    next
+  }
+
   titles <- read.table(paste("plot_titles", suffix, ".txt", sep=""), sep="\t")$V1
 
   png(filename=paste("plots", suffix, ".png", sep=""), width=500*3, height=500*ceiling(length(titles)/3), res=200)
