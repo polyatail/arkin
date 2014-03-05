@@ -4,9 +4,9 @@ for (suffix in c(".percentages", ".log2")) {
   titles <- read.table(paste("plot_titles", suffix, ".txt", sep=""), sep="\t")$V1
 
   png(filename=paste("plots", suffix, ".png", sep=""), width=500*3, height=500*ceiling(length(titles)/3), res=200)
-  
+
   par(mfrow=c(ceiling(length(titles)/3),3))
-  
+
   for (i in seq_along(titles))
   {
     data <- read.table(paste("plot_data", suffix, ".txt", sep=""), header=F, skip=(i-1)*2, nrow=2)
@@ -15,7 +15,7 @@ for (suffix in c(".percentages", ".log2")) {
     abline(reg)
     mtext(bquote(y == .(coef(reg)[2])*x + .(coef(reg)[1])), adj=1, padj=0, cex=0.8)
   }
-  
+
   dev.off()
 }
 

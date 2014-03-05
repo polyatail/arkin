@@ -384,14 +384,14 @@ def main():
 
   # load barcodes
   fwd_bcs, rev_bcs = load_barcodes(args[0])
-  
+
   if options.zip_fname:
     # open zipfile
     miseq_zip = zipfile.ZipFile(options.zip_fname)
-  
+
     # find pairs
     pairs = dict([("_".join(x.split("/")[-1].split(".")[0].split("_")[:-2]), (x, y)) for x, y in find_pairs(miseq_zip)])
-  
+
     if options.sample_name not in pairs:
       raise ValueError("Could not find %s in %s!" % (options.sample_name, options.zip_fname))
 
@@ -403,7 +403,7 @@ def main():
   elif options.fwd_fname and options.rev_fname:
     fwd = open(options.fwd_fname, "r")
     rev = open(options.rev_fname, "r")
-  
+
   barcode_to_count = {}
 
   if options.merge or options.merged_fname:
@@ -420,20 +420,20 @@ def main():
         # run pear to merge reads
         sys.stderr.write("Merging reads...\n")
         merged, stats = pear(fwd.name, rev.name)
-  
+
         if stats["assembled_reads"] < options.min_merged_perc:
           sys.stderr.write("  Warning: only %.02f%% of reads assembled\n" % stats["assembled_reads"])
 
         merged_fastq = fast_fastq(open("%s.assembled.fastq" % merged.name, "r"))
       elif options.merged_fname:
         merged_fastq = fast_fastq(open(options.merged_fname, "r"))
-  
+
       # read through fastq
       sys.stderr.write("Filtering and demultiplexing reads...\n")
 
       for merged_read in merged_fastq:
         total_reads += 1
-  
+
         # check that read passes quality filter
         if not qual_filter(merged_read):
           continue
@@ -446,12 +446,12 @@ def main():
 
         if len(merged_read.sequence) > max_quality_read_length:
           max_quality_read_length = len(merged_read.sequence)
-  
+
         total_quality_read_length += len(merged_read.sequence)
 
         # demultiplex
         dm_out = demultiplex(merged_read, fwd_bcs.values(), rev_bcs.values(), None)
- 
+
         if dm_out == False:
           # strip pair info from read and write to unassigned file
           merged_read.id = merged_read.id.split(" ")[0]
@@ -469,7 +469,7 @@ def main():
 
           trimmed_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
           assigned.write(trimmed_read.raw())
-  
+
       if total_reads > 0:
         if quality_reads / total_reads < options.min_qual_perc:
           sys.stderr.write("  Warning: only %.02f%% of reads passed quality filter\n" % (quality_reads * 100 / total_reads))
@@ -498,13 +498,13 @@ def main():
          open(os.path.join(options.output_dir, "rev_reads.unassigned.fastq"), "w") as r_unassigned:
       total_reads = 0.0
       quality_reads = 0.0
-  
+
       # read through foward and reverse fastq simultaneously
       sys.stderr.write("Filtering and demultiplexing reads...\n")
 
       for f_read, r_read in izip(fast_fastq(open(fwd.name, "r")), fast_fastq(open(rev.name, "r"))):
         total_reads += 1
-  
+
         # check that read passes quality filter
         if qual_filter(f_read) == False or qual_filter(r_read) == False:
           continue
@@ -513,7 +513,7 @@ def main():
 
         # demultiplex
         dm_out = demultiplex(f_read, fwd_bcs.values(), rev_bcs.values(), r_read)
- 
+
         if dm_out == False:
           # strip pair info from read and write to unassigned file
           f_read.id = f_read.id.split(" ")[0]
@@ -534,7 +534,7 @@ def main():
 
           trimmed_f_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
           f_assigned.write(trimmed_f_read.raw())
-  
+
           trimmed_r_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
           r_assigned.write(trimmed_r_read.raw())
 

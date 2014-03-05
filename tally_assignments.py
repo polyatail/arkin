@@ -324,7 +324,7 @@ def main():
           trials = 1
         else:
           trials = 10
-    
+
         for j in range(trials):
           sys.stderr.write("\r  Sampling %s reads trial %s/%s" % (i, j+1, trials))
           ss_reads = subsample(args[0], i)
