@@ -347,28 +347,30 @@ def main():
           break
   else:
     # generate table
-    sys.stderr.write("Tallying assigned reads...\n")
+    sys.stderr.write("Tallying assigned reads...")
     table = mktable(open(args[0], "r"), barcode_to_sample)
     writetable(table, "tally.txt")
 
-    sys.stderr.write("\nWriting table, percentages of total reads...\n")
+    sys.stderr.write("\n\nWriting table, percentages of total reads...")
     percentage_table = percentages(table)
     writetable(percentage_table, "tally.percentages.txt")
 
-    sys.stderr.write("Crunching percentage data...\n")
+    sys.stderr.write("\nCrunching percentage data...")
     perc_crunch = crunch(percentage_table, plate)
 
     if options.std_org:
-      sys.stderr.write("\nWriting table, counts normalized to %s...\n" % options.std_org)
+      sys.stderr.write("\n\nWriting table, counts normalized to %s..." % options.std_org)
       normalized_table = normalize(table, options.std_org)
       writetable(normalized_table, "tally.normalized.txt")
 
-      sys.stderr.write("Writing table, log2(counts normalized to %s)...\n" % options.std_org)
+      sys.stderr.write("\nWriting table, log2(counts normalized to %s)..." % options.std_org)
       log2_norm_table = normalize(table, options.std_org, log_ratio=True)
       writetable(log2_norm_table, "tally.normalized.log2.txt")
 
-      sys.stderr.write("Crunching log2 ratio data...\n")
+      sys.stderr.write("\nCrunching log2 ratio data...")
       log_crunch = crunch(percentage_table, plate, log_ratio=True)
+
+  sys.stderr.write("\n")
 
 if __name__ == "__main__":
   main()
