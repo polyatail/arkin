@@ -481,7 +481,7 @@ def main():
       sys.stderr.write("\n  Mean read length:  %d" % (total_quality_read_length / quality_reads))
       sys.stderr.write("\n  Max read length:   %d\n" % max_quality_read_length)
       sys.stderr.write("\n  Assigned reads:    %d" % sum(barcode_to_count.values()))
-      sys.stderr.write("\n  Unassigned reads:  %d" % quality_reads - sum(barcode_to_count.values()))
+      sys.stderr.write("\n  Unassigned reads:  %d" % (quality_reads - sum(barcode_to_count.values())))
       sys.stderr.write("\n  Avg reads/barcode: %d\n" % mean(barcode_to_count.values()))
 
       if options.merge:

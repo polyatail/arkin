@@ -125,14 +125,14 @@ def crunch(table, plate, log_ratio=False):
       continue
     elif plate[sample]["type"].lower().startswith("standard"):
       std_name = plate[sample]["type"].split("_")[1]
-      expected = [x.split(":") for x in plate[sample]["expected"].split(",")]
+      expected = dict([x.split(":") for x in plate[sample]["expected"].split(",")])
 
       try:
         data["standards"][std_name]
       except KeyError:
         data["standards"][std_name] = {}
 
-      for orgname, expval in expected:
+      for orgname, expval in expected.items():
         expval = float(expval)
 
         if log_ratio:
@@ -142,7 +142,14 @@ def crunch(table, plate, log_ratio=False):
             #sys.stderr.write("Warning: %s: Expected %s = %s%% of reads, but found 0\n" % (sample, orgname, expval))
             continue
 
-          expval = log2(expval / (100 - sum([float(x[1]) for x in expected])))
+          # if an expected value for the standard is there, use it
+          if options.std_org in expected:
+            denom = expected[options.std_org]
+          # otherwise assume it occupies the rest of the sample
+          else:
+            denom = (100 - sum([float(x[1]) for x in expected]))
+
+          expval = log2(expval / denom)
         else:
           try:
             actual = table[sample][orgname]
