@@ -46,7 +46,7 @@ def parse_usearch(fwd_b6, rev_b6, out_fname, merged_b6 = False):
         l = l.strip().split("\t")
 
         # can be multiple 16S sequences per taxon, e.g. 10F2_1 and 10F2_2
-        l[1] = "_".join(l[1].rsplit("_", 1)[0])
+        l[1] = l[1].rsplit("_", 1)[0]
 
         out_fp.write("%s\t%s\n" % tuple(l[:2]))
         count += 1
