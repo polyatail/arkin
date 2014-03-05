@@ -7,9 +7,12 @@ __date__ = "2/26/2014"
 __version__ = 1.0
 
 from optparse import OptionParser, OptionGroup
-from numpy import mean
+from numpy import mean, log2
+import subprocess
 import sys
 import os
+
+PATH_TO_SHUF = "shuf"
 
 def load_barcodes(bc_file):
   fwd_bcs = {}
@@ -70,26 +73,29 @@ def writetable(table, out_fname):
 
   with open(os.path.join(options.output_dir, out_fname), "w") as fp:
     fp.write("\t".join(["sample"] + taxa) + "\n")
-  
+
     for sample in sorted(table.keys()):
       row = [sample]
-  
+
       for taxon in taxa:
         try:
           row.append(table[sample][taxon])
         except KeyError:
           row.append(0)
-  
+
       fp.write("\t".join(map(str, row)) + "\n")
 
-def normalize(table, std_org):
+def normalize(table, std_org, log_ratio=False):
   new_table = {}
 
   for sample in table:
     new_table[sample] = {}
 
     for taxon in table[sample]:
-      new_table[sample][taxon] = table[sample][taxon] / float(table[sample][std_org])
+      if log_ratio:
+        new_table[sample][taxon] = log2(table[sample][taxon] / float(table[sample][std_org]))
+      else:
+        new_table[sample][taxon] = table[sample][taxon] / float(table[sample][std_org])
 
   return new_table
 
@@ -104,7 +110,7 @@ def percentages(table):
 
   return new_table
 
-def crunch(table, plate):
+def crunch(table, plate, log_ratio=False):
   # contains actual vs expected values
   data = {"standards": {},
           "unknowns": {}}
@@ -127,10 +133,22 @@ def crunch(table, plate):
         data["standards"][std_name] = {}
 
       for orgname, expval in expected:
-        try:
-          actual = table[sample][orgname]
-        except KeyError:
-          actual = 0.0
+        expval = float(expval)
+
+        if log_ratio:
+          try:
+            actual = log2(table[sample][orgname] / float(table[sample][options.std_org]))
+          except KeyError:
+            #sys.stderr.write("Warning: %s: Expected %s = %s%% of reads, but found 0\n" % (sample, orgname, expval))
+            continue
+
+          expval = log2(expval / (100 - sum([float(x[1]) for x in expected])))
+        else:
+          try:
+            actual = table[sample][orgname]
+          except KeyError:
+            #sys.stderr.write("Warning: %s: Expected %s = %s%% of reads, but found 0\n" % (sample, orgname, expval))
+            continue
 
         try:
           data["standards"][std_name][orgname]
@@ -138,27 +156,81 @@ def crunch(table, plate):
           data["standards"][std_name][orgname] = {}
 
         try:
-          data["standards"][std_name][orgname][float(expval)]
-        except KeyError: 
-          data["standards"][std_name][orgname][float(expval)] = []
+          data["standards"][std_name][orgname][expval]
+        except KeyError:
+          data["standards"][std_name][orgname][expval] = []
 
-        data["standards"][std_name][orgname][float(expval)].append(actual)
+        data["standards"][std_name][orgname][expval].append(actual)
 
   #TODO: do regression (linear??) and quantitate unknowns
 
   # write data for plotting
-  with open(os.path.join(options.output_dir, "plot_titles.txt"), "w") as titles_fp, \
-       open(os.path.join(options.output_dir, "plot_data.txt"), "w") as data_fp:
+  suffix = ".log2.txt" if log_ratio else ".percentages.txt"
+
+  with open(os.path.join(options.output_dir, "plot_titles" + suffix), "w") as titles_fp, \
+       open(os.path.join(options.output_dir, "plot_data" + suffix), "w") as data_fp:
     for std_name in data["standards"]:
       for org_name in data["standards"][std_name]:
         header, row = [], []
-  
+
         for expval, actval in data["standards"][std_name][org_name].items():
           header.extend([expval] * len(actval))
           row.extend(actval)
- 
-        titles_fp.write("Standard '%s': %s\n" % (std_name, org_name)) 
+
+        titles_fp.write("Standard '%s': %s\n" % (std_name, org_name))
         data_fp.write("%s\n%s\n" % ("\t".join(map(str, header)), "\t".join(map(str, row))))
+
+  return data
+
+def rms_error(crunched):
+  errors = []
+
+  for std_name in crunched["standards"].keys():
+    for org_name in crunched["standards"][std_name]:
+      for expval in crunched["standards"][std_name][org_name]:
+        errors.extend([expval - x for x in crunched["standards"][std_name][org_name][expval]])
+
+  return rms(errors)
+
+def rms(vec):
+  return (sum([x ** 2 for x in vec]) / float(len(vec))) ** 0.5
+
+def subsample(fname, size):
+  shuf = subprocess.Popen([PATH_TO_SHUF],
+                          stdin=open(fname, "r"),
+                          stdout=subprocess.PIPE)
+
+  sample = []
+
+  for l in shuf.stdout:
+    sample.append(l)
+
+    if len(sample) == size:
+      break
+
+  shuf.kill()
+
+  return sample
+
+def mktable(iterable, barcode_key):
+  table = dict([(x, {}) for x in barcode_key.values()])
+
+  for l in iterable:
+    l = l.strip().split("\t")
+
+    barcode = "_".join(l[0].split("_")[:-1])
+
+    try:
+      sample = barcode_key[barcode]
+    except KeyError:
+      continue
+
+    try:
+      table[sample][l[1]] += 1
+    except KeyError:
+      table[sample][l[1]] = 1
+
+  return table
 
 def parse_options(arguments):
   global options, args
@@ -171,6 +243,12 @@ def parse_options(arguments):
                     metavar="[./]",
                     default="./",
                     help="write output files to this directory")
+
+  parser.add_option("--rarefaction",
+                    dest="rarefaction",
+                    action="store_true",
+                    default=False,
+                    help="skip tally and do rarefaction analysis")
 
   parser.add_option("--std-org",
                     dest="std_org",
@@ -222,34 +300,68 @@ def main():
   # map barcodes to samples
   barcode_to_sample = map_bc_to_sample(plate, fwd_bcs, rev_bcs)
 
-  # generate table
-  table = dict([(x, {}) for x in barcode_to_sample.values()])
- 
-  for l in open(args[0], "r"):
-    l = l.strip().split("\t")
+  if options.rarefaction:
+    sys.stderr.write("Performing rarefaction analysis...\n")
+    def _countlines(fname):
+      for i, _ in enumerate(open(fname)):
+        pass
 
-    barcode = "_".join(l[0].split("_")[:-1])
+      return i
 
-    try:
-      sample = barcode_to_sample[barcode]
-    except KeyError:
-      continue
+    maxlines = _countlines(args[0])
 
-    try:
-      table[sample][l[1]] += 1
-    except KeyError:
-      table[sample][l[1]] = 1
+    sys.stderr.write("  Total assigned reads: %s\n" % maxlines)
 
-  writetable(table, "tally.txt")
+    # 100 to 100M or maxlines reads
+    with open(os.path.join(options.output_dir, "rarefaction.txt"), "w") as fp:
+      fp.write("reads_sampled\trms_error\n")
 
-  if options.std_org:
-    normalized_table = normalize(table, options.std_org)
-    writetable(normalized_table, "tally.normalized.txt")
+      for exp in range(2, 9):
+        i = 10 ** exp
 
-  percentage_table = percentages(table) 
-  writetable(percentage_table, "tally.percentages.txt")
+        if i > maxlines:
+          i = maxlines
+          trials = 1
+        else:
+          trials = 10
+    
+        for j in range(trials):
+          sys.stderr.write("\r  Sampling %s reads trial %s/%s" % (i, j+1, trials))
+          ss_reads = subsample(args[0], i)
+          ss_table = mktable(ss_reads, barcode_to_sample)
+          ss_perc_table = percentages(ss_table)
+          ss_log_crunch = crunch(ss_perc_table, plate, log_ratio=True)
 
-  crunch(percentage_table, plate)
+          fp.write("%s\t%s\n" % (i, rms_error(ss_log_crunch)))
+
+        sys.stderr.write("\n")
+
+        if i == maxlines:
+          break
+  else:
+    # generate table
+    sys.stderr.write("Tallying assigned reads...\n")
+    table = mktable(open(args[0], "r"), barcode_to_sample)
+    writetable(table, "tally.txt")
+
+    sys.stderr.write("\nWriting table in terms of percentages...\n")
+    percentage_table = percentages(table)
+    writetable(percentage_table, "tally.percentages.txt")
+
+    sys.stderr.write("Crunching percentage data and generating plots...\n")
+    perc_crunch = crunch(percentage_table, plate)
+
+    if options.std_org:
+      sys.stderr.write("\nNormalizing counts to %s...\n" % options.std_org)
+      normalized_table = normalize(table, options.std_org)
+      writetable(normalized_table, "tally.normalized.txt")
+
+      sys.stderr.write("Calculating log2 ratios...\n")
+      log2_norm_table = normalize(table, options.std_org, log_ratio=True)
+      writetable(log2_norm_table, "tally.normalized.log2.txt")
+
+      sys.stderr.write("Crunching log2 ratio data and generating plots...\n")
+      log_crunch = crunch(percentage_table, plate, log_ratio=True)
 
 if __name__ == "__main__":
   main()
