@@ -92,6 +92,9 @@ def normalize(table, std_org, log_ratio=False):
     new_table[sample] = {}
 
     for taxon in table[sample]:
+      if std_org not in table[sample]:
+        continue
+
       if log_ratio:
         new_table[sample][taxon] = log2(table[sample][taxon] / float(table[sample][std_org]))
       else:
@@ -125,7 +128,7 @@ def crunch(table, plate, log_ratio=False):
       continue
     elif plate[sample]["type"].lower().startswith("standard"):
       std_name = plate[sample]["type"].split("_")[1]
-      expected = dict([x.split(":") for x in plate[sample]["expected"].split(",")])
+      expected = dict([(x.split(":")[0], float(x.split(":")[1])) for x in plate[sample]["expected"].split(",")])
 
       try:
         data["standards"][std_name]
@@ -133,13 +136,11 @@ def crunch(table, plate, log_ratio=False):
         data["standards"][std_name] = {}
 
       for orgname, expval in expected.items():
-        expval = float(expval)
-
         if log_ratio:
           try:
             actual = log2(table[sample][orgname] / float(table[sample][options.std_org]))
           except KeyError:
-            #sys.stderr.write("Warning: %s: Expected %s = %s%% of reads, but found 0\n" % (sample, orgname, expval))
+            sys.stderr.write("Warning: %s: Expected %s = %s%% of reads, but found 0\n" % (sample, orgname, expval))
             continue
 
           # if an expected value for the standard is there, use it
@@ -154,7 +155,7 @@ def crunch(table, plate, log_ratio=False):
           try:
             actual = table[sample][orgname]
           except KeyError:
-            #sys.stderr.write("Warning: %s: Expected %s = %s%% of reads, but found 0\n" % (sample, orgname, expval))
+            sys.stderr.write("Warning: %s: Expected %s = %s%% of reads, but found 0\n" % (sample, orgname, expval))
             continue
 
         try:
@@ -178,6 +179,9 @@ def crunch(table, plate, log_ratio=False):
        open(os.path.join(options.output_dir, "plot_data" + suffix), "w") as data_fp:
     for std_name in data["standards"]:
       for org_name in data["standards"][std_name]:
+        if org_name == options.std_org:
+          continue
+
         header, row = [], []
 
         for expval, actval in data["standards"][std_name][org_name].items():

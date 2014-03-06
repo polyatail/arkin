@@ -145,7 +145,7 @@ def writeplate(plate, barcodes, unknowns, fname):
 
         # figure out what we expect to see
         denom_no_media = float(sum([plate[well][x] for x in plate[well] if x != "media"]))
-        row.append(",".join(["%s=%s" % (x, y / denom_no_media) for x, y in plate[well].items() if x != "media"]))
+        row.append(",".join(["%s:%s" % (x, y * 100 / denom_no_media) for x, y in plate[well].items() if x != "media" and y > 0]))
 
       fp.write("\t".join(row) + "\n")
 
