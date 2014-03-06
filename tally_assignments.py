@@ -147,7 +147,7 @@ def crunch(table, plate, log_ratio=False):
             denom = expected[options.std_org]
           # otherwise assume it occupies the rest of the sample
           else:
-            denom = (100 - sum([float(x[1]) for x in expected]))
+            denom = (100 - sum([float(x[1]) for x in expected.items()]))
 
           expval = log2(expval / denom)
         else:
