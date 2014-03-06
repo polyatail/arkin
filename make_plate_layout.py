@@ -52,7 +52,7 @@ def mkplate(iterable):
 
   cols = []
   rows = []
- 
+
   for l_num, l in enumerate(iterable):
     if l.startswith("#"):
       if l.strip().lower() == "#newplate":
