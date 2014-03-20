@@ -11,6 +11,7 @@ from numpy import mean
 from itertools import izip
 from fastq import fast_fastq
 from string import maketrans, translate
+from common import load_barcodes, load_plate, map_bc_to_sample
 import sys
 import time
 import os
@@ -168,29 +169,6 @@ def qual_filter(read):
 
   return reduce(lambda x, y: x & y, votes)
 
-def load_barcodes(bc_file):
-  fwd_bcs = {}
-  rev_bcs = {}
-
-  header = False
-
-  for l in open(bc_file, "r"):
-    if l.startswith("#"):
-      if header:
-        continue
-      elif l.startswith("#name"):
-        header = l[1:].strip().split("\t")
-    else:
-      l = dict(zip(header, l.strip().split("\t")))
-
-      if l["orientation"] == "forward":
-        fwd_bcs[l["name"]] = l["barcode"]
-
-      if l["orientation"] == "reverse":
-        rev_bcs[l["name"]] = l["barcode"]
-
-  return (fwd_bcs, rev_bcs)
-
 def parse_options(arguments):
   global options, args
 
@@ -264,6 +242,13 @@ def parse_options(arguments):
                     metavar="[0]",
                     default=0,
                     help="fixed barcode location within read")
+
+  group2.add_option("--use-plate",
+                    dest="use_plate",
+                    type="str",
+                    metavar="[plate_layout.txt]",
+                    default=False,
+                    help="load plate and name reads by samples, not barcodes")
 
   group3.add_option("--merge",
                     dest="merge",
@@ -369,6 +354,11 @@ def parse_options(arguments):
     parser.print_help()
     sys.exit(1)
 
+  if options.use_plate and not os.path.isfile(options.use_plate):
+    print "Error: Specified plate layout file does not exist"
+    parser.print_help()
+    sys.exit(1)
+
   if not (options.min_qual or options.max_errors):
     print "Warning: Specify --min-qual or --max-errors to enable quality filtering"
 
@@ -384,6 +374,10 @@ def main():
 
   # load barcodes
   fwd_bcs, rev_bcs = load_barcodes(args[0])
+
+  if options.use_plate:
+    plate = load_plate(options.use_plate)
+    barcode_to_sample = map_bc_to_sample(plate, fwd_bcs, rev_bcs)
 
   if options.zip_fname:
     # open zipfile
@@ -467,7 +461,11 @@ def main():
           except KeyError:
             barcode_to_count[bc_name] = 1
 
-          trimmed_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
+          if options.use_plate:
+            trimmed_read.id = "%s_%s" % (barcode_to_sample[bc_name], barcode_to_count[bc_name])
+          else:
+            trimmed_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
+
           assigned.write(trimmed_read.raw())
 
       if total_reads > 0:
@@ -532,10 +530,18 @@ def main():
           except KeyError:
             barcode_to_count[bc_name] = 1
 
-          trimmed_f_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
+          if options.use_plate:
+            trimmed_f_read.id = "%s_%s" % (barcode_to_sample[bc_name], barcode_to_count[bc_name])
+          else:
+            trimmed_f_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
+
           f_assigned.write(trimmed_f_read.raw())
 
-          trimmed_r_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
+          if options.use_plate:
+            trimmed_r_read.id = "%s_%s" % (barcode_to_sample[bc_name], barcode_to_count[bc_name])
+          else:
+            trimmed_r_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
+
           r_assigned.write(trimmed_r_read.raw())
 
       if total_reads > 0:
@@ -547,7 +553,7 @@ def main():
       sys.stderr.write("\n  Quality pairs:     %d" % quality_reads)
       sys.stderr.write("\n  Assigned pairs:    %d" % sum(barcode_to_count.values()))
       sys.stderr.write("\n  Unassigned pairs:  %d" % (quality_reads - sum(barcode_to_count.values())))
-      sys.stderr.write("\n  Avg pairs/barcode: %d\n" % mean(barcode_to_count.values()))
+      sys.stderr.write("\n  Avg pairs/barcode: %d\n" % int(mean(barcode_to_count.values())))
 
   # remove temporary files
   if options.zip_fname:
