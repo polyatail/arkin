@@ -13,7 +13,7 @@ import os
 def parse_options(arguments):
   global options, args
 
-  parser = OptionParser(usage="%prog [options] <samplevols.txt>",
+  parser = OptionParser(usage="%prog [options] <-v samplevols.txt|-b barcodes.txt -m plate_num [-m ...]>",
                         version="%prog " + str(__version__))
 
   parser.add_option("-o",
@@ -22,12 +22,49 @@ def parse_options(arguments):
                     default="./data",
                     help="write output files to this directory")
 
+  parser.add_option("-v",
+                    dest="samplevols",
+                    metavar="[samplevols.txt]",
+                    default=False,
+                    help="expected volume mode, use these sample volumes")
+
+  parser.add_option("-b",
+                    dest="barcodes",
+                    metavar="[barcodes.txt]",
+                    default=False,
+                    help="multi-plate mode, use this barcode layout")
+
+  parser.add_option("-m",
+                    dest="multi_plates",
+                    action="append",
+                    metavar="[plate_num]",
+                    default=[],
+                    help="multi-plate mode, make this plate number")
+
   options, args = parser.parse_args(arguments)
 
-  if len(args) <> 1:
+  if len(args) <> 0:
     print "Error: Incorrect number of arguments"
     parser.print_help()
     sys.exit(1)
+
+  if options.barcodes and not options.multi_plates:
+    print "Error: -m must be specified with -b"
+    parser.print_help()
+    sys.exit(1)
+
+  if options.samplevols and (options.barcodes or options.multi_plates):
+    print "Error: -v cannot be used with -m or -b"
+    parser.print_help()
+    sys.exit(1)
+
+  if not (options.samplevols or options.barcodes):
+    print "Error: Must specify one of -b or -v"
+    parser.print_help()
+    sys.exit(1)
+
+  if options.multi_plates:
+    options.multi_plates = map(int, options.multi_plates)
 
   if not os.path.exists(options.output_dir):
     os.mkdir(options.output_dir)
@@ -40,6 +77,55 @@ def parse_options(arguments):
     print "Error: File plate_layout.txt already exists in output directory"
     parser.print_help()
     sys.exit(1)
+
+def load_multi_barcode(iterable):
+  rev_barcodes = {}
+  fwd_barcodes = {}
+  all_plates = {}
+
+  action = False
+  counter = False
+
+  for l in iterable:
+    l = l.strip()
+
+    if l.startswith("#reverse"):
+      action = "reverse"
+      counter = 1
+      continue
+    elif l.startswith("#forward"):
+      action = "forward"
+      counter = 1
+      continue
+    elif l.startswith("#plate"):
+      action = "plate"
+      continue
+
+    if action == "reverse":
+      rev_barcodes[counter] = ["R%02d" % int(x) for x in l.split()]
+      counter += 1
+    elif action == "forward":
+      fwd_barcodes[counter] = ["F%02d" % int(x) for x in l.split()]
+      counter += 1
+    elif action == "plate":
+      l = map(int, l.split())
+
+      plate = {}
+      barcodes = {}
+      unknowns = {}
+
+      for row_num, row_letter in enumerate("ABCDEFGH"):
+        for col_num, col_letter in enumerate(range(1, 13)):
+          well = "%s_%s%s" % (l[0], row_letter, col_letter)
+
+          unknowns[well] = {"unknowns": True}
+          barcodes[well] = {"forward": fwd_barcodes[l[1]][row_num],
+                            "reverse": rev_barcodes[l[2]][col_num]}
+          plate[well] = {}
+
+      all_plates[l[0]] = (plate, barcodes, unknowns)
+
+  return all_plates
 
 def mkplate(iterable):
   plate = {}
@@ -125,15 +211,18 @@ def mkplate(iterable):
 
   return plate, barcodes, unknowns
 
-def writeplate(plate, barcodes, unknowns, fname):
-  with open(os.path.join(options.output_dir, fname), "w") as fp:
-    fp.write("\t".join(["#sample", "fwd_barcode", "rev_barcode", "type", "expected", "description"]) + "\n")
+def writeplate(plate, barcodes, unknowns, fname, append = False):
+  writemode = "a" if append else "w"
+
+  with open(os.path.join(options.output_dir, fname), writemode) as fp:
+    if not append:
+      fp.write("\t".join(["#sample", "fwd_barcode", "rev_barcode", "type", "expected", "description"]) + "\n")
 
     for well in sorted(plate.keys()):
       row = [well, barcodes[well]["forward"], barcodes[well]["reverse"]]
 
       # what type of row is this?
-      if well in unknowns[well]:
+      if well in unknowns:
         if sum(plate[well].values()) > 0:
           raise ValueError("Well %s: Listed as unknown but has non-zero known volumes" % well)
 
@@ -152,8 +241,18 @@ def writeplate(plate, barcodes, unknowns, fname):
 def main():
   parse_options(sys.argv[1:])
 
-  plate, barcodes, unknowns = mkplate(open(args[0], "r"))
-  writeplate(plate, barcodes, unknowns, "plate_layout.txt")
+  if options.samplevols:
+    plate, barcodes, unknowns = mkplate(open(options.samplevols, "r"))
+    writeplate(plate, barcodes, unknowns, "plate_layout.txt")
+  elif options.barcodes:
+    barcodes = load_multi_barcode(open(options.barcodes, "r"))
+
+    append = False
+
+    for plate_num in options.multi_plates:
+      writeplate(barcodes[plate_num][0], barcodes[plate_num][1],
+                 barcodes[plate_num][2], "plate_layout.txt", append)
+      append = True
 
 if __name__ == "__main__":
   main()
