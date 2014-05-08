@@ -512,6 +512,17 @@ def main():
         # demultiplex
         dm_out = demultiplex(f_read, fwd_bcs.values(), rev_bcs.values(), r_read)
 
+        if dm_out:
+          trimmed_f_read, trimmed_r_read, f_bc, r_bc = dm_out
+
+          bc_name = "%s_%s" % (f_bc, r_bc)
+
+          # we want to rename to sample names, and a barcode was found to match
+          # something in barcodes.txt, but that particular barcode is not in use
+          # in our plate layout. in this case, ignore this read
+          if bc_name not in barcode_to_sample:
+            dm_out = False
+
         if dm_out == False:
           # strip pair info from read and write to unassigned file
           f_read.id = f_read.id.split(" ")[0]
@@ -521,9 +532,6 @@ def main():
           r_unassigned.write(r_read.raw())
         else:
           # rename reads to barcodes used and write to assigned file
-          trimmed_f_read, trimmed_r_read, f_bc, r_bc = dm_out
-
-          bc_name = "%s_%s" % (f_bc, r_bc)
 
           try:
             barcode_to_count[bc_name] += 1
