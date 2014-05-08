@@ -59,17 +59,3 @@ def map_bc_to_sample(plate, fwd_bcs, rev_bcs):
     barcode_to_sample[barcode] = sample
 
   return barcode_to_sample
-
-def map_bc_to_sample(plate, fwd_bcs, rev_bcs):
-  barcode_to_sample = {}
-
-  for sample in plate:
-    barcode = "%s_%s" % (fwd_bcs[plate[sample]["fwd_barcode"]],
-                         rev_bcs[plate[sample]["rev_barcode"]])
-
-    if barcode in barcode_to_sample:
-      raise ValueError("Sample %s shares barcode (%s) with %s" % (sample, barcode, barcode_to_sample[barcode]))
-
-    barcode_to_sample[barcode] = sample
-
-  return barcode_to_sample
