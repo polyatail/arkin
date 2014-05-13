@@ -42,7 +42,7 @@ def fetch_unzip(zipfile_obj, filename):
 
   return ungzipped
 
-def pear(fwd_fname, rev_fname):
+def pear(fwd_fname, rev_fname, mem_size, num_threads):
   # accepts fwd and rev paired end reads, returns temporary file containing
   # presumably overlapping reads merged into single reads and percentage of
   # reads unable to be merged (high % indicates a problem)
@@ -52,7 +52,7 @@ def pear(fwd_fname, rev_fname):
   pear = subprocess.Popen([PATH_TO_PEAR,
                            "-f", fwd_fname, "-r", rev_fname,
                            "-o", outfile.name,
-                           "-y", options.mem_size, "-j", str(options.num_threads),
+                           "-y", mem_size, "-j", str(num_threads),
                            "-p", "0.01"],
                           stdout=subprocess.PIPE)
 
@@ -109,30 +109,30 @@ def find_pairs(zipfile_obj):
 
   return list(set(pairs))
 
-def match_bc(read, bcs):
+def match_bc(read, bcs, bc_offset, max_mismatch):
   # greedy barcode matching algorithm returns first barcode with a match
   # hamming distance <= max mismatches away
 
-  offset = options.bc_offset
+  offset = bc_offset
 
   for barcode in bcs:
-    if hamming_dist(read[offset:offset+len(barcode)], barcode) <= options.max_mismatch:
+    if hamming_dist(read[offset:offset+len(barcode)], barcode) <= max_mismatch:
       # barcode match
       return (offset, barcode)
   else:
     return False
 
-def demultiplex(fastq_fwd, fwd_bcs, rev_bcs, fastq_rev = None):
+def demultiplex(fastq_fwd, fwd_bcs, rev_bcs, fastq_rev = None, bc_offset, max_mismatch):
   # takes input reads, tries to assign them bins based on barcodes, then
   # returns trimmed reads and bin name
 
-  fwd_match = match_bc(fastq_fwd.sequence, fwd_bcs)
+  fwd_match = match_bc(fastq_fwd.sequence, fwd_bcs, bc_offset, max_mismatch)
 
   if fastq_rev == None:
     # merged read
-    rev_match = match_bc(revcomp(fastq_fwd.sequence), rev_bcs)
+    rev_match = match_bc(revcomp(fastq_fwd.sequence), rev_bcs, bc_offset, max_mismatch)
   else:
-    rev_match = match_bc(fastq_rev.sequence, rev_bcs)
+    rev_match = match_bc(fastq_rev.sequence, rev_bcs, bc_ofset, max_mismatch)
 
   if fwd_match == False or rev_match == False:
     # couldn't match to both fwd and rev barcodes
@@ -148,19 +148,19 @@ def demultiplex(fastq_fwd, fwd_bcs, rev_bcs, fastq_rev = None):
 
     return (fastq_fwd, fastq_rev, fwd_match[1], rev_match[1])
 
-def qual_filter(read):
+def qual_filter(read, min_qual, phred_offset, max_errors):
   votes = []
 
-  if options.min_qual:
-    if mean([ord(x) - options.phred_offset for x in read.quals]) < options.min_qual:
+  if min_qual:
+    if mean([ord(x) - phred_offset for x in read.quals]) < min_qual:
       votes.append(False)
     else:
       votes.append(True)
   else:
     votes.append(True)
 
-  if options.max_errors:
-    if sum([10 ** -((ord(x) - options.phred_offset)/10.0) for x in read.quals]) > options.max_errors:
+  if max_errors:
+    if sum([10 ** -((ord(x) - phred_offset)/10.0) for x in read.quals]) > max_errors:
       votes.append(False)
     else:
       votes.append(True)
@@ -413,7 +413,7 @@ def main():
       if options.merge:
         # run pear to merge reads
         sys.stderr.write("Merging reads...\n")
-        merged, stats = pear(fwd.name, rev.name)
+        merged, stats = pear(fwd.name, rev.name, options.mem_size, options.num_threads)
 
         if stats["assembled_reads"] < options.min_merged_perc:
           sys.stderr.write("  Warning: only %.02f%% of reads assembled\n" % stats["assembled_reads"])
@@ -429,7 +429,7 @@ def main():
         total_reads += 1
 
         # check that read passes quality filter
-        if not qual_filter(merged_read):
+        if not qual_filter(merged_read, options.min_qual, options.phred_offset, options.max_errors):
           continue
 
         # keep track of stats
@@ -444,7 +444,7 @@ def main():
         total_quality_read_length += len(merged_read.sequence)
 
         # demultiplex
-        dm_out = demultiplex(merged_read, fwd_bcs.values(), rev_bcs.values(), None)
+        dm_out = demultiplex(merged_read, fwd_bcs.values(), rev_bcs.values(), None, options.bc_offset, options.max_mismatch)
 
         if dm_out == False:
           # strip pair info from read and write to unassigned file
@@ -504,13 +504,14 @@ def main():
         total_reads += 1
 
         # check that read passes quality filter
-        if qual_filter(f_read) == False or qual_filter(r_read) == False:
+        if qual_filter(f_read, options.min_qual, options.phred_offset, options.max_errors) == False or \
+           qual_filter(r_read, options.min_qual, options.phred_offset, options.max_errors) == False:
           continue
 
         quality_reads += 1
 
         # demultiplex
-        dm_out = demultiplex(f_read, fwd_bcs.values(), rev_bcs.values(), r_read)
+        dm_out = demultiplex(f_read, fwd_bcs.values(), rev_bcs.values(), r_read, options.bc_offset, options.max_mismatch)
 
         if dm_out == False:
           # strip pair info from read and write to unassigned file
