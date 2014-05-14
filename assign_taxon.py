@@ -48,19 +48,20 @@ def extract_unaligned_lomem(b6_fname, in_fname, out_fname):
        open(in_fname, "r") as in_fp, \
        open(out_fname, "w") as out_fp:
     for b6_l, in_r in izip_longest(b6_fp, fast_fastq(in_fp), fillvalue=False):
-      if b6_l:
+      try:
         b6_l = b6_l.split("\t", 1)
+        del in_cache[b6_l[0]]
+      except KeyError:
+        b6_cache.add(b6_l[0])
+      except AttributeError:
+        pass
 
-        try:
-          del in_cache[b6_l[0]]
-        except KeyError:
-          b6_cache.add(b6_l[0])
-
-      if in_r:
-        try:
-          b6_cache.remove(in_r.id)
-        except KeyError:
-          in_cache[in_r.id] = in_r.raw()
+      try:
+        b6_cache.remove(in_r.id)
+      except KeyError:
+        in_cache[in_r.id] = in_r.raw()
+      except AttributeError:
+        pass
 
     # dump all the reads that remain
     out_fp.write("".join(in_cache.values()))
