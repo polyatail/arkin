@@ -10,7 +10,7 @@ import resource
 from optparse import OptionParser, OptionGroup
 from numpy import mean
 from fastq import fast_fastq, fastq_to_fasta
-from itertools import izip, izip_longest
+from itertools import izip_longest
 import tempfile
 import subprocess
 import time
@@ -88,37 +88,42 @@ def parse_usearch(fwd_b6, rev_b6, out_fname, merged_b6 = False):
       fwd_to_taxon = {}
       rev_to_taxon = {}
 
-      for f_l, r_l in izip(fwd_fp, rev_fp):
-        f_l = f_l.strip().split("\t")
-        r_l = r_l.strip().split("\t")
+      for f_l, r_l in izip_longest(fwd_fp, rev_fp, fillvalue=False):
+        if f_l:
+          f_l = f_l.strip().split("\t")
 
-        # can be multiple 16S sequences per taxon, e.g. 10F2_1 and 10F2_2
-        f_l[1] = f_l[1].rsplit("_", 1)[0]
-        r_l[1] = r_l[1].rsplit("_", 1)[0]
+          # can be multiple 16S sequences per taxon, e.g. 10F2_1 and 10F2_2
+          f_l[1] = f_l[1].rsplit("_", 1)[0]
 
-        try:
-          # reverse read matches forward read
-          if rev_to_taxon[f_l[0]] == f_l[1]:
-            #print "match! %s, fwd = %s, rev = %s" % (f_l[0], f_l[1], rev_to_taxon[f_l[0]])
-            out_fp.write("%s\t%s\n" % (f_l[0], f_l[1]))
-            del rev_to_taxon[f_l[0]]
-            count += 1
-        except KeyError:
-          # we haven't come across the matching reverse read yet
-          #print "saving fwd %s -> %s" % (f_l[0], f_l[1])
-          fwd_to_taxon[f_l[0]] = f_l[1]
+          try:
+            # reverse read matches forward read
+            if rev_to_taxon[f_l[0]] == f_l[1]:
+              #print "match! %s, fwd = %s, rev = %s" % (f_l[0], f_l[1], rev_to_taxon[f_l[0]])
+              out_fp.write("%s\t%s\n" % (f_l[0], f_l[1]))
+              del rev_to_taxon[f_l[0]]
+              count += 1
+          except KeyError:
+            # we haven't come across the matching reverse read yet
+            #print "saving fwd %s -> %s" % (f_l[0], f_l[1])
+            fwd_to_taxon[f_l[0]] = f_l[1]
 
-        try:
-          # forward read matches reverse read
-          if fwd_to_taxon[r_l[0]] == r_l[1]:
-            #print "match! %s, rev = %s, fwd = %s" % (r_l[0], r_l[1], fwd_to_taxon[r_l[0]])
-            out_fp.write("%s\t%s\n" % (r_l[0], r_l[1]))
-            del fwd_to_taxon[r_l[0]]
-            count += 1
-        except KeyError:
-          # we haven't come across the matching foward read yet
-          #print "saving rev %s -> %s" % (r_l[0], r_l[1])
-          rev_to_taxon[r_l[0]] = r_l[1]
+        if r_l:
+          r_l = r_l.strip().split("\t")
+
+          # can be multiple 16S sequences per taxon, e.g. 10F2_1 and 10F2_2
+          r_l[1] = r_l[1].rsplit("_", 1)[0]
+
+          try:
+            # forward read matches reverse read
+            if fwd_to_taxon[r_l[0]] == r_l[1]:
+              #print "match! %s, rev = %s, fwd = %s" % (r_l[0], r_l[1], fwd_to_taxon[r_l[0]])
+              out_fp.write("%s\t%s\n" % (r_l[0], r_l[1]))
+              del fwd_to_taxon[r_l[0]]
+              count += 1
+          except KeyError:
+            # we haven't come across the matching foward read yet
+            #print "saving rev %s -> %s" % (r_l[0], r_l[1])
+            rev_to_taxon[r_l[0]] = r_l[1]
 
     return (fwd_to_taxon, rev_to_taxon, count)
 
@@ -233,7 +238,7 @@ def main():
 
     if options.save_unaligned:
       sys.stderr.write("\nFinding and writing unaligned reads...")
-      unaligned_fasta = os.path.join(options.output_dir, "merged_reads.unaligned.fa")
+      unaligned_fasta = os.path.join(options.output_dir, "merged_reads.unaligned.fastq")
       extract_unaligned_lomem(merged_b6, options.merged_fname, unaligned_fasta)
       sys.stderr.write("\n")
   else:
@@ -267,11 +272,11 @@ def main():
 
     if options.save_unaligned:
       sys.stderr.write("\nFinding and writing unaligned forward reads...")
-      fwd_unaligned_fasta = os.path.join(options.output_dir, "fwd_reads.unaligned.fa")
+      fwd_unaligned_fasta = os.path.join(options.output_dir, "fwd_reads.unaligned.fastq")
       extract_unaligned_lomem(fwd_b6, options.fwd_fname, fwd_unaligned_fasta)
 
       sys.stderr.write("\nFinding and writing unaligned reverse reads...")
-      rev_unaligned_fasta = os.path.join(options.output_dir, "rev_reads.unaligned.fa")
+      rev_unaligned_fasta = os.path.join(options.output_dir, "rev_reads.unaligned.fastq")
       extract_unaligned_lomem(rev_b6, options.rev_fname, rev_unaligned_fasta)
       sys.stderr.write("\n")
 
