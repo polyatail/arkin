@@ -109,30 +109,28 @@ def find_pairs(zipfile_obj):
 
   return list(set(pairs))
 
-def match_bc(read, bcs, bc_offset, max_mismatch):
+def match_bc(read, bcs, max_mismatch):
   # greedy barcode matching algorithm returns first barcode with a match
   # hamming distance <= max mismatches away
 
-  offset = bc_offset
-
   for barcode in bcs:
-    if hamming_dist(read[offset:offset+len(barcode)], barcode) <= max_mismatch:
+    if hamming_dist(read[0:len(barcode)], barcode) <= max_mismatch:
       # barcode match
-      return (offset, barcode)
+      return barcode
   else:
     return False
 
-def demultiplex(fastq_fwd, fwd_bcs, rev_bcs, fastq_rev = None, bc_offset, max_mismatch):
+def demultiplex(fastq_fwd, fwd_bcs, rev_bcs, fastq_rev = None, max_mismatch):
   # takes input reads, tries to assign them bins based on barcodes, then
   # returns trimmed reads and bin name
 
-  fwd_match = match_bc(fastq_fwd.sequence, fwd_bcs, bc_offset, max_mismatch)
+  fwd_match = match_bc(fastq_fwd.sequence, fwd_bcs, max_mismatch)
 
   if fastq_rev == None:
     # merged read
-    rev_match = match_bc(revcomp(fastq_fwd.sequence), rev_bcs, bc_offset, max_mismatch)
+    rev_match = match_bc(revcomp(fastq_fwd.sequence), rev_bcs, max_mismatch)
   else:
-    rev_match = match_bc(fastq_rev.sequence, rev_bcs, bc_offset, max_mismatch)
+    rev_match = match_bc(fastq_rev.sequence, rev_bcs, max_mismatch)
 
   if fwd_match == False or rev_match == False:
     # couldn't match to both fwd and rev barcodes
@@ -141,10 +139,10 @@ def demultiplex(fastq_fwd, fwd_bcs, rev_bcs, fastq_rev = None, bc_offset, max_mi
     # trim reads and quality scores
     if fastq_rev == None:
       # merged read
-      fastq_fwd = fastq_fwd[fwd_match[0]+len(fwd_match[1]):-(rev_match[0]+len(rev_match[1]))]
+      fastq_fwd = fastq_fwd[len(fwd_match[1]):-len(rev_match[1])]
     else:
-      fastq_fwd = fastq_fwd[fwd_match[0]+len(fwd_match[1]):]
-      fastq_rev = fastq_rev[rev_match[0]+len(rev_match[1]):]
+      fastq_fwd = fastq_fwd[len(fwd_match[1]):]
+      fastq_rev = fastq_rev[len(rev_match[1]):]
 
     return (fastq_fwd, fastq_rev, fwd_match[1], rev_match[1])
 
@@ -235,13 +233,6 @@ def parse_options(arguments):
                     metavar="[2]",
                     default=2,
                     help="maximum allowed mismatches in barcodes")
-
-  group2.add_option("--bc-offset",
-                    dest="bc_offset",
-                    type="int",
-                    metavar="[0]",
-                    default=0,
-                    help="fixed barcode location within read")
 
   group2.add_option("--use-plate",
                     dest="use_plate",
@@ -444,7 +435,7 @@ def main():
         total_quality_read_length += len(merged_read.sequence)
 
         # demultiplex
-        dm_out = demultiplex(merged_read, fwd_bcs.values(), rev_bcs.values(), None, options.bc_offset, options.max_mismatch)
+        dm_out = demultiplex(merged_read, fwd_bcs.values(), rev_bcs.values(), None, options.max_mismatch)
 
         if dm_out == False:
           # strip pair info from read and write to unassigned file
@@ -511,7 +502,7 @@ def main():
         quality_reads += 1
 
         # demultiplex
-        dm_out = demultiplex(f_read, fwd_bcs.values(), rev_bcs.values(), r_read, options.bc_offset, options.max_mismatch)
+        dm_out = demultiplex(f_read, fwd_bcs.values(), rev_bcs.values(), r_read, options.max_mismatch)
 
         if dm_out == False:
           # strip pair info from read and write to unassigned file
