@@ -6,10 +6,11 @@ __email__ = "andrewscz@gmail.com"
 __date__ = "2/26/2014"
 __version__ = 1.0
 
+import resource
 from optparse import OptionParser, OptionGroup
 from numpy import mean
 from fastq import fast_fastq, fastq_to_fasta
-from itertools import izip
+from itertools import izip, izip_longest
 import tempfile
 import subprocess
 import time
@@ -35,6 +36,34 @@ def usearch(input_fname, output_fname, params = []):
 
   if usearch.returncode <> 0:
     raise ValueError("USEARCH exited with an error (%s)" % usearch.returncode)
+
+def extract_unaligned_lomem(b6_fname, in_fname, out_fname):
+  # extracts unaligned reads using a small memory footprint--probably the
+  # smallest possible that doesnt require reads to be sorted
+
+  b6_cache = set([])
+  in_cache = {}
+
+  with open(b6_fname, "r") as b6_fp, \
+       open(in_fname, "r") as in_fp, \
+       open(out_fname, "w") as out_fp:
+    for b6_l, in_r in izip_longest(b6_fp, fast_fastq(in_fp), fillvalue=False):
+      if b6_l:
+        b6_l = b6_l.split("\t", 1)
+
+        try:
+          del in_cache[b6_l[0]]
+        except KeyError:
+          b6_cache.add(b6_l[0])
+
+      if in_r:
+        try:
+          b6_cache.remove(in_r.id)
+        except KeyError:
+          in_cache[in_r.id] = in_r.raw()
+
+    # dump all the reads that remain
+    out_fp.write("".join(in_cache.values()))
 
 def parse_usearch(fwd_b6, rev_b6, out_fname, merged_b6 = False):
   count = 0
@@ -137,6 +166,12 @@ def parse_options(arguments):
                     default=95,
                     help="minimum percent identity for matches")
 
+  parser.add_option("--save-unaligned",
+                    dest="save_unaligned",
+                    action="store_true",
+                    default=False,
+                    help="seperate out reads that didn't align")
+
   options, args = parser.parse_args(arguments)
 
   if len(args) <> 1:
@@ -195,6 +230,12 @@ def main():
     sys.stderr.write("\n  Total reads:       %d" % merged_fasta.read_count)
     sys.stderr.write("\n  Aligned reads:     %d" % aligned_reads)
     sys.stderr.write("\n  Unaligned reads:   %d\n" % (merged_fasta.read_count - aligned_reads))
+
+    if options.save_unaligned:
+      sys.stderr.write("\nFinding and writing unaligned reads...")
+      unaligned_fasta = os.path.join(options.output_dir, "merged_reads.unaligned.fa")
+      extract_unaligned_lomem(merged_b6, options.merged_fname, unaligned_fasta)
+      sys.stderr.write("\n")
   else:
     sys.stderr.write("Converting forward reads to FASTA...")
     fwd_fasta = fastq_to_fasta(options.fwd_fname)
@@ -223,6 +264,16 @@ def main():
     sys.stderr.write("\n  Concordant pairs:  %d" % aligned_pairs)
     sys.stderr.write("\n  Discordant pairs:  %d" % len(discordant_pairs))
     sys.stderr.write("\n  Orphaned reads:    %d\n" % len(orphaned_reads))
+
+    if options.save_unaligned:
+      sys.stderr.write("\nFinding and writing unaligned forward reads...")
+      fwd_unaligned_fasta = os.path.join(options.output_dir, "fwd_reads.unaligned.fa")
+      extract_unaligned_lomem(fwd_b6, options.fwd_fname, fwd_unaligned_fasta)
+
+      sys.stderr.write("\nFinding and writing unaligned reverse reads...")
+      rev_unaligned_fasta = os.path.join(options.output_dir, "rev_reads.unaligned.fa")
+      extract_unaligned_lomem(rev_b6, options.rev_fname, rev_unaligned_fasta)
+      sys.stderr.write("\n")
 
 if __name__ == "__main__":
   main()
