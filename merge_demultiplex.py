@@ -132,7 +132,7 @@ def demultiplex(fastq_fwd, fwd_bcs, rev_bcs, fastq_rev = None, bc_offset, max_mi
     # merged read
     rev_match = match_bc(revcomp(fastq_fwd.sequence), rev_bcs, bc_offset, max_mismatch)
   else:
-    rev_match = match_bc(fastq_rev.sequence, rev_bcs, bc_ofset, max_mismatch)
+    rev_match = match_bc(fastq_rev.sequence, rev_bcs, bc_offset, max_mismatch)
 
   if fwd_match == False or rev_match == False:
     # couldn't match to both fwd and rev barcodes
