@@ -114,13 +114,13 @@ def match_bc(read, bcs, max_mismatch):
   # hamming distance <= max mismatches away
 
   for barcode in bcs:
-    if hamming_dist(read[0:len(barcode)], barcode) <= max_mismatch:
+    if hamming_dist(read[:len(barcode)], barcode) <= max_mismatch:
       # barcode match
       return barcode
   else:
     return False
 
-def demultiplex(fastq_fwd, fwd_bcs, rev_bcs, fastq_rev = None, max_mismatch):
+def demultiplex(fastq_fwd, fwd_bcs, fastq_rev, rev_bcs, max_mismatch):
   # takes input reads, tries to assign them bins based on barcodes, then
   # returns trimmed reads and bin name
 
@@ -139,12 +139,12 @@ def demultiplex(fastq_fwd, fwd_bcs, rev_bcs, fastq_rev = None, max_mismatch):
     # trim reads and quality scores
     if fastq_rev == None:
       # merged read
-      fastq_fwd = fastq_fwd[len(fwd_match[1]):-len(rev_match[1])]
+      fastq_fwd = fastq_fwd[len(fwd_match):-len(rev_match)]
     else:
-      fastq_fwd = fastq_fwd[len(fwd_match[1]):]
-      fastq_rev = fastq_rev[len(rev_match[1]):]
+      fastq_fwd = fastq_fwd[len(fwd_match):]
+      fastq_rev = fastq_rev[len(rev_match):]
 
-    return (fastq_fwd, fastq_rev, fwd_match[1], rev_match[1])
+    return (fastq_fwd, fastq_rev, fwd_match, rev_match)
 
 def qual_filter(read, min_qual, phred_offset, max_errors):
   votes = []
@@ -435,7 +435,7 @@ def main():
         total_quality_read_length += len(merged_read.sequence)
 
         # demultiplex
-        dm_out = demultiplex(merged_read, fwd_bcs.values(), rev_bcs.values(), None, options.max_mismatch)
+        dm_out = demultiplex(merged_read, fwd_bcs.values(), None, rev_bcs.values(), options.max_mismatch)
 
         if dm_out == False:
           # strip pair info from read and write to unassigned file
@@ -502,7 +502,7 @@ def main():
         quality_reads += 1
 
         # demultiplex
-        dm_out = demultiplex(f_read, fwd_bcs.values(), rev_bcs.values(), r_read, options.max_mismatch)
+        dm_out = demultiplex(f_read, fwd_bcs.values(), r_read, rev_bcs.values(), options.max_mismatch)
 
         if dm_out == False:
           # strip pair info from read and write to unassigned file
