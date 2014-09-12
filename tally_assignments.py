@@ -15,13 +15,34 @@ import os
 
 PATH_TO_SHUF = "shuf"
 
+def multiplate_sorter(x, y):
+  x_plate, x_well = x.split("_")
+  y_plate, y_well = y.split("_")
+
+  if x_plate < y_plate:
+    return -1
+  elif x_plate == y_plate:
+    if ord(x_well[0]) < ord(y_well[0]):
+      return -1
+    elif ord(x_well[0]) == ord(y_well[0]):
+      if int(x_well[1:]) < int(y_well[1:]):
+        return -1
+      elif int(x_well[1:]) == int(y_well[1:]):
+        return 0
+      elif int(x_well[1:]) > int(y_well[1:]):
+        return 1
+    if ord(x_well[0]) > ord(y_well[0]):
+      return 1
+  elif x_plate > y_plate:
+    return 1
+
 def writetable(table, out_fname):
   taxa = list(set(sum([table[x].keys() for x in table], [])))
 
   with open(os.path.join(options.output_dir, out_fname), "w") as fp:
     fp.write("\t".join(["sample"] + taxa) + "\n")
 
-    for sample in sorted(table.keys()):
+    for sample in sorted(table.keys(), cmp=multiplate_sorter):
       row = [sample]
 
       for taxon in taxa:
