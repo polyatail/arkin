@@ -25,11 +25,14 @@ def usearch(input_fname, output_fname, params = []):
                               "-db", args[0],
                               "-blast6out", output_fname,
                               "-strand", "both",
+                              "-maxhits", "32",
+                              "-maxaccepts", "1",
+                              "-maxrejects", "32",
                               "-id", str(options.identity),
                               "-threads", str(options.num_threads)] + \
                              params,
                              stderr=subprocess.STDOUT,
-                             stdout=open(os.devnull))
+                             stdout=open("usearch.log", "w"))#open(os.devnull))
 
   while usearch.poll() == None:
     time.sleep(0.1)
