@@ -13,7 +13,7 @@ import os
 def parse_options(arguments):
   global options, args
 
-  parser = OptionParser(usage="%prog [options] <-v samplevols.txt|-b barcodes.txt -m plate_num [-m ...]>",
+  parser = OptionParser(usage="%prog [options] <-v samplevols.txt|-b arrayed_barcodes.txt -m plate_num [-m ...]>",
                         version="%prog " + str(__version__))
 
   parser.add_option("-o",
@@ -30,7 +30,7 @@ def parse_options(arguments):
 
   parser.add_option("-b",
                     dest="barcodes",
-                    metavar="[barcodes.txt]",
+                    metavar="[arrayed_barcodes.txt]",
                     default=False,
                     help="multi-plate mode, use this barcode layout")
 
