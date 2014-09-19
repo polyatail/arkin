@@ -564,6 +564,12 @@ def main():
       sys.stderr.write("\n  Unassigned pairs:  %d" % (quality_reads - sum(barcode_to_count.values())))
       sys.stderr.write("\n  Avg pairs/barcode: %d\n" % int(mean(barcode_to_count.values())))
 
+  sorted_barcode_to_count = sorted(barcode_to_count.items(), key=lambda x, y: y, reverse=True)
+
+  with open(os.path.join(options.output_dir, "barcode_to_count.log"), "w") as fp:
+    for barcode, count in sorted_barcode_to_count:
+      fp.write("%s\t%s\n" % (barcode, count))
+
   # remove temporary files
   if options.zip_fname:
     os.unlink(fwd.name)
