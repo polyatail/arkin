@@ -62,9 +62,11 @@ def pear(fwd_fname, rev_fname, mem_size, num_threads):
   if pear.returncode <> 0:
     raise ValueError("Pear exited with an error (%s)" % pear.returncode)
 
+  raw_pear_log = []
   stats = {}
 
   for line in pear.stdout:
+    raw_pear_log.append(line)
     line = line.strip()
 
     if line.endswith("%)"):
@@ -77,7 +79,7 @@ def pear(fwd_fname, rev_fname, mem_size, num_threads):
       elif line.startswith("Not assembled reads"):
         stats["unassembled_reads"] = perc
 
-  return outfile, stats
+  return outfile, stats, "".join(raw_pear_log)
 
 def find_pairs(zipfile_obj):
   # accepts zipfile object and returns tuples of paired-end reads
@@ -404,7 +406,9 @@ def main():
       if options.merge:
         # run pear to merge reads
         sys.stderr.write("Merging reads...\n")
-        merged, stats = pear(fwd.name, rev.name, options.mem_size, options.num_threads)
+        merged, stats, raw_pear_log = pear(fwd.name, rev.name, options.mem_size, options.num_threads)
+
+        open(os.path.join(options.output_dir, "pear.log"), "w").write(raw_pear_log)
 
         if stats["assembled_reads"] < options.min_merged_perc:
           sys.stderr.write("  Warning: only %.02f%% of reads assembled\n" % stats["assembled_reads"])
