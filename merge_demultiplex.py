@@ -396,9 +396,7 @@ def main():
   if options.merge or options.merged_fname:
     with open(os.path.join(options.output_dir, "merged_reads.assigned.fastq"), "w") as assigned, \
          open(os.path.join(options.output_dir, "merged_reads.unassigned.fastq"), "w") as unassigned:
-      min_quality_read_length = 1e10
-      max_quality_read_length = 0
-      total_quality_read_length = 0.0
+      read_length_bins = {}
 
       total_reads = 0.0
       quality_reads = 0.0
@@ -430,13 +428,10 @@ def main():
         # keep track of stats
         quality_reads += 1
 
-        if len(merged_read.sequence) < min_quality_read_length:
-          min_quality_read_length = len(merged_read.sequence)
-
-        if len(merged_read.sequence) > max_quality_read_length:
-          max_quality_read_length = len(merged_read.sequence)
-
-        total_quality_read_length += len(merged_read.sequence)
+        try:
+          read_length_bins[len(merged_read.sequence)] += 1
+        except KeyError:
+          read_length_bins[len(merged_read.sequence)] = 1
 
         # demultiplex
         dm_out = demultiplex(merged_read, fwd_bcs.values(), None, rev_bcs.values(), options.max_mismatch)
@@ -470,12 +465,16 @@ def main():
       sys.stderr.write("\nSummary")
       sys.stderr.write("\n  Total reads:       %d" % total_reads)
       sys.stderr.write("\n  Quality reads:     %d" % quality_reads)
-      sys.stderr.write("\n  Min read length:   %d" % min_quality_read_length)
-      sys.stderr.write("\n  Mean read length:  %d" % (total_quality_read_length / quality_reads))
-      sys.stderr.write("\n  Max read length:   %d\n" % max_quality_read_length)
+      sys.stderr.write("\n  Min read length:   %d" % min(read_length_bins.keys()))
+      sys.stderr.write("\n  Mean read length:  %d" % mean(read_length_bins.keys()))
+      sys.stderr.write("\n  Max read length:   %d\n" % max(read_length_bins.keys()))
       sys.stderr.write("\n  Assigned reads:    %d" % sum(barcode_to_count.values()))
       sys.stderr.write("\n  Unassigned reads:  %d" % (quality_reads - sum(barcode_to_count.values())))
       sys.stderr.write("\n  Avg reads/barcode: %d\n" % mean(barcode_to_count.values()))
+
+      with open(os.path.join(options.output_dir, "read_lengths.log"), "w") as fp:
+        for read_length, count in sorted(read_length_bins.items(), key=lambda x: x[0], reverse=True):
+          fp.write("%s\t%s\n" % (read_length, count))
 
       if options.merge:
         # remove temporary files
@@ -564,7 +563,7 @@ def main():
       sys.stderr.write("\n  Unassigned pairs:  %d" % (quality_reads - sum(barcode_to_count.values())))
       sys.stderr.write("\n  Avg pairs/barcode: %d\n" % int(mean(barcode_to_count.values())))
 
-  sorted_barcode_to_count = sorted(barcode_to_count.items(), key=lambda x, y: y, reverse=True)
+  sorted_barcode_to_count = sorted(barcode_to_count.items(), key=lambda x: x[1], reverse=True)
 
   with open(os.path.join(options.output_dir, "barcode_to_count.log"), "w") as fp:
     for barcode, count in sorted_barcode_to_count:
