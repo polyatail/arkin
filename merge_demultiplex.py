@@ -576,8 +576,12 @@ def main():
   sorted_barcode_to_count = sorted(barcode_to_count.items(), key=lambda x: x[1], reverse=True)
 
   with open(os.path.join(options.output_dir, "barcode_to_count.log"), "w") as fp:
-    for barcode, count in sorted_barcode_to_count:
-      fp.write("%s\t%s\n" % (barcode, count))
+    if options.use_plate:
+      for barcode, count in sorted_barcode_to_count:
+        fp.write("%s\t%s\t%s\n" % (barcode, barcode_to_sample[barcode], count))
+    else:
+      for barcode, count in sorted_barcode_to_count:
+        fp.write("%s\t%s\n" % (barcode, count))
 
   # remove temporary files
   if options.zip_fname:
