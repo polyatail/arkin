@@ -172,7 +172,7 @@ def qual_filter(read, min_qual, phred_offset, max_errors):
 def parse_options(arguments):
   global options, args
 
-  parser = OptionParser(usage="%prog [options] <-f/-r/-m/-z/-s filename> <barcodes.txt>",
+  parser = OptionParser(usage="%prog [options] <-f/-r/-m/-z/-s filename> <barcodes.txt> <plate_layout.txt>",
                         version="%prog " + str(__version__))
 
   group1 = OptionGroup(parser, "Input Files")
@@ -236,12 +236,12 @@ def parse_options(arguments):
                     default=2,
                     help="maximum allowed mismatches in barcodes")
 
-  group2.add_option("--use-plate",
+  group2.add_option("--no-plate-layout",
                     dest="use_plate",
-                    type="str",
-                    metavar="[plate_layout.txt]",
-                    default=False,
-                    help="load plate and name reads by samples, not barcodes")
+                    action="store_false",
+                    metavar="",
+                    default=True,
+                    help="name reads by barcodes, not by sample names")
 
   group3.add_option("--merge",
                     dest="merge",
@@ -291,7 +291,8 @@ def parse_options(arguments):
 
   options, args = parser.parse_args(arguments)
 
-  if len(args) <> 1:
+  if (options.use_plate == True and len(args) <> 2) or \
+     (options.use_plate == False and len(args) <> 1):
     print "Error: Incorrect number of arguments"
     parser.print_help()
     sys.exit(1)
@@ -347,7 +348,7 @@ def parse_options(arguments):
     parser.print_help()
     sys.exit(1)
 
-  if options.use_plate and not os.path.isfile(options.use_plate):
+  if options.use_plate and not os.path.isfile(args[1]):
     print "Error: Specified plate layout file does not exist"
     parser.print_help()
     sys.exit(1)
@@ -369,7 +370,7 @@ def main():
   fwd_bcs, rev_bcs = load_barcodes(args[0])
 
   if options.use_plate:
-    plate = load_plate(options.use_plate)
+    plate = load_plate(args[1])
     barcode_to_sample = map_bc_to_sample(plate, fwd_bcs, rev_bcs)
 
   if options.zip_fname:
