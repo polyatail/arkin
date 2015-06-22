@@ -6,9 +6,16 @@ __email__ = "andrewscz@gmail.com"
 __date__ = "3/19/2014"
 __version__ = 1.0
 
-def multiplate_sorter(x, y): 
-  x_plate, x_well = x.split("_")
-  y_plate, y_well = y.split("_")
+def multiplate_sorter(x, y):
+  try: 
+    x_plate, x_well = x.split("_")
+  except ValueError:
+    x_plate, x_well = x[:2], x[2:]
+
+  try:
+    y_plate, y_well = y.split("_")
+  except ValueError:
+    y_plate, y_well = y[:2], y[2:]
 
   if x_plate < y_plate:
     return -1

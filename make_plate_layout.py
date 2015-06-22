@@ -98,7 +98,7 @@ def load_multi_barcode(iterable):
 
       for row_num, row_letter in enumerate("ABCDEFGH"):
         for col_num, col_letter in enumerate(range(1, 13)):
-          well = "%s_%s%s" % (l[0], row_letter, col_letter)
+          well = "%02d%s%02d" % (l[0], row_letter, col_letter)
 
           plates[l[0]][well] = {"forward": fwd_barcodes[l[1]][row_num],
                                 "reverse": rev_barcodes[l[2]][col_num]}
