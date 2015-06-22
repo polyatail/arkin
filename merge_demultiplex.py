@@ -446,6 +446,11 @@ def main():
 
           bc_name = "%s_%s" % (f_bc, r_bc)
 
+          try:
+            barcode_to_count[bc_name] += 1
+          except KeyError:
+            barcode_to_count[bc_name] = 1
+
           # we want to rename to sample names, and a barcode was found to match
           # something in barcodes.txt, but that particular barcode is not in use
           # in our plate layout. in this case, ignore this read
@@ -455,11 +460,6 @@ def main():
             unassigned.write(merged_read.raw())
 
             continue
-
-          try:
-            barcode_to_count[bc_name] += 1
-          except KeyError:
-            barcode_to_count[bc_name] = 1
 
           if options.use_plate:
             trimmed_read.id = "%s_%s" % (barcode_to_sample[bc_name], barcode_to_count[bc_name])
@@ -530,6 +530,11 @@ def main():
 
           bc_name = "%s_%s" % (f_bc, r_bc)
 
+          try:
+            barcode_to_count[bc_name] += 1
+          except KeyError:
+            barcode_to_count[bc_name] = 1
+
           # we want to rename to sample names, and a barcode was found to match
           # something in barcodes.txt, but that particular barcode is not in use
           # in our plate layout. in this case, ignore this read
@@ -542,11 +547,6 @@ def main():
             r_unassigned.write(r_read.raw())
 
             continue
-
-          try:
-            barcode_to_count[bc_name] += 1
-          except KeyError:
-            barcode_to_count[bc_name] = 1
 
           if options.use_plate:
             trimmed_f_read.id = "%s_%s" % (barcode_to_sample[bc_name], barcode_to_count[bc_name])
@@ -578,7 +578,12 @@ def main():
   with open(os.path.join(options.output_dir, "barcode_to_count.log"), "w") as fp:
     if options.use_plate:
       for barcode, count in sorted_barcode_to_count:
-        fp.write("%s\t%s\t%s\n" % (barcode, barcode_to_sample[barcode], count))
+        try:
+          sample_name = barcode_to_sample[barcode]
+        except KeyError:
+          sample_name = "BARCODE_NOT_IN_PLATE_LAYOUT"
+
+        fp.write("%s\t%s\t%s\n" % (barcode, sample_name, count))
     else:
       for barcode, count in sorted_barcode_to_count:
         fp.write("%s\t%s\n" % (barcode, count))
