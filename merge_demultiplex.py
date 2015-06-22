@@ -446,6 +446,16 @@ def main():
 
           bc_name = "%s_%s" % (f_bc, r_bc)
 
+          # we want to rename to sample names, and a barcode was found to match
+          # something in barcodes.txt, but that particular barcode is not in use
+          # in our plate layout. in this case, ignore this read
+          if options.use_plate and bc_name not in barcode_to_sample:
+            # strip pair info from read and write to unassigned file
+            merged_read.id = merged_read.id.split(" ")[0]
+            unassigned.write(merged_read.raw())
+
+            continue
+
           try:
             barcode_to_count[bc_name] += 1
           except KeyError:
