@@ -7,9 +7,8 @@ __date__ = "2/26/2014"
 __version__ = 1.0
 
 from optparse import OptionParser, OptionGroup
-from numpy import mean, log2
-from common import load_barcodes, load_plate, map_bc_to_sample, multiplate_sorter
-import subprocess
+from numpy import log2
+from common import multiplate_sorter
 import sys
 import os
 
@@ -58,18 +57,18 @@ def percentages(table):
 
   return new_table
 
-def mktable(iterable, barcode_key):
-  table = dict([(x, {}) for x in barcode_key.values()])
+def mktable(iterable):
+  table = {}
 
   for l in iterable:
     l = l.strip().split("\t")
 
-    barcode = "_".join(l[0].split("_")[:-1])
+    sample = l[0].split("_")[0]
 
     try:
-      sample = barcode_key[barcode]
+      table[sample]
     except KeyError:
-      continue
+      table[sample] = {}
 
     try:
       table[sample][l[1]] += 1
@@ -81,7 +80,7 @@ def mktable(iterable, barcode_key):
 def parse_options(arguments):
   global options, args
 
-  parser = OptionParser(usage="%prog [options] <assignments.txt> <barcodes.txt> <plate_layout.txt>",
+  parser = OptionParser(usage="%prog [options] <assignments.txt>",
                         version="%prog " + str(__version__))
 
   parser.add_option("-o",
@@ -98,23 +97,13 @@ def parse_options(arguments):
 
   options, args = parser.parse_args(arguments)
 
-  if len(args) <> 3:
+  if len(args) <> 1:
     print "Error: Incorrect number of arguments"
     parser.print_help()
     sys.exit(1)
 
   if not os.path.isfile(args[0]):
     print "Error: Specified assignments file does not exist"
-    parser.print_help()
-    sys.exit(1)
-
-  if not os.path.isfile(args[1]):
-    print "Error: Specified barcode file does not exist"
-    parser.print_help()
-    sys.exit(1)
-
-  if not os.path.isfile(args[2]):
-    print "Error: Specified plate layout file does not exist"
     parser.print_help()
     sys.exit(1)
 
@@ -131,18 +120,9 @@ def parse_options(arguments):
 def main():
   parse_options(sys.argv[1:])
 
-  # load barcodes
-  fwd_bcs, rev_bcs = load_barcodes(args[1])
-
-  # load plate layout
-  plate = load_plate(args[2])
-
-  # map barcodes to samples
-  barcode_to_sample = map_bc_to_sample(plate, fwd_bcs, rev_bcs)
-
   # generate table
   sys.stderr.write("Tallying assigned reads...")
-  table = mktable(open(args[0], "r"), barcode_to_sample)
+  table = mktable(open(args[0], "r"))
   writetable(table, "tally.txt")
 
   sys.stderr.write("\n\nWriting table, percentages of total reads...")
