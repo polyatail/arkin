@@ -88,7 +88,7 @@ def open_files(formats):
 
   return fps
 
-def split_file(input_fp, fps, dests, formats, read_index):
+def split_file(input_fp, fps, dests, formats, read_index, stats):
   for read in fast_fastq(input_fp):
     sample = read.id.split("_")[0]
 
@@ -96,6 +96,7 @@ def split_file(input_fp, fps, dests, formats, read_index):
       read_dest = dests[sample]
     except KeyError:
       #sys.stderr.write("read: %s notfound\n" % read.id)
+      stats["notfound"]["matched"] += 1
       fps["notfound"][read_index].write(read.raw())
       continue
 
@@ -105,17 +106,20 @@ def split_file(input_fp, fps, dests, formats, read_index):
 
     # read too short
     if read_format[1] != -1 and len(read.sequence) < read_format[1]:
+      stats[read_dest]["short"] += 1
       #sys.stderr.write("  len(read) = %s < %s\n" % (len(read.sequence), read_format[1]))
       continue
 
     # read too long
     if read_format[2] != -1 and len(read.sequence) > read_format[2]:
+      stats[read_dest]["long"] += 1
       #sys.stderr.write("  len(read) = %s > %s\n" % (len(read.sequence), read_format[2]))
       continue
 
     # read didn't match regular expression
     if read_format[3]:
       if not read_format[3].match(read.sequence):
+        stats[read_dest]["regexp"] += 1
         #sys.stderr.write("  regexp match failed\n")
         continue
 
@@ -127,6 +131,7 @@ def split_file(input_fp, fps, dests, formats, read_index):
       raw_read = read.raw()
 
     # write it out
+    stats[read_dest]["matched"] += 1
     #sys.stderr.write("  write to %s\n\n" % fps[read_dest][read_index])
     fps[read_dest][read_index].write(raw_read) 
 
@@ -211,16 +216,32 @@ def main():
   dests = load_destinations(args[0], formats)
   fps = open_files(formats)
 
+  # make dict to keep track of stats
+  stats = {}
+
+  for f in ["notfound"] + formats.keys():
+    stats[f] = {"matched": 0,
+                "short": 0,
+                "long":  0,
+                "regexp": 0}
+
   if options.merged_fname:
     sys.stderr.write("Filtering merged reads...")
-    split_file(open(options.merged_fname, "r"), fps, dests, formats, 0)
+    split_file(open(options.merged_fname, "r"), fps, dests, formats, 0, stats)
 
   else:
     sys.stderr.write("Filtering forward reads...")
-    split_file(open(options.fwd_fname, "r"), fps, dests, formats, 0)
+    split_file(open(options.fwd_fname, "r"), fps, dests, formats, 0, stats)
     
     sys.stderr.write("\n\nFiltering reverse reads...")
-    split_file(open(options.rev_fname, "r"), fps, dests, formats, 1)
+    split_file(open(options.rev_fname, "r"), fps, dests, formats, 1, stats)
+
+  # write stats out to file
+  with open(os.path.join(options.output_dir, "split_stats.log"), "w") as fp:
+    fp.write("\t".join(["#format", "matched", "too_short", "too_long", "regexp_no_match"]) + "\n")
+
+    for f in stats:
+      fp.write("\t".join(map(str, [f, stats[f]["matched"], stats[f]["short"], stats[f]["long"], stats[f]["regexp"]])) + "\n")
 
   sys.stderr.write("\n")
 
