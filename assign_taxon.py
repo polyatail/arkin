@@ -6,10 +6,8 @@ __email__ = "andrewscz@gmail.com"
 __date__ = "2/26/2014"
 __version__ = 1.0
 
-import resource
 from optparse import OptionParser, OptionGroup
-from numpy import mean
-from fastq import fast_fastq, fastq_to_fasta
+from fastq import fast_fastq, fastq_to_fasta, count_reads_fasta
 from itertools import izip_longest
 import tempfile
 import subprocess
@@ -143,6 +141,12 @@ def parse_options(arguments):
                     default="./intermediate",
                     help="write output files to this directory")
 
+  parser.add_option("--fasta",
+                    dest="fasta",
+                    action="store_true",
+                    default=False,
+                    help="input files are in FASTA format")
+
   parser.add_option("-f",
                     dest="fwd_fname",
                     type="str",
@@ -226,10 +230,14 @@ def main():
   parse_options(sys.argv[1:])
 
   if options.merged_fname:
-    sys.stderr.write("Converting merged reads to FASTA...")
-    merged_fasta = fastq_to_fasta(options.merged_fname)
-    merged_b6 = os.path.join(options.output_dir, "merged_reads.usearch.b6")
+    if not options.fasta:
+      sys.stderr.write("Converting merged reads to FASTA...")
+      merged_fasta = fastq_to_fasta(options.merged_fname)
+    else:
+      merged_fasta = count_reads_fasta(options.merged_fname)
+
     sys.stderr.write("\nRunning USEARCH on merged reads...")
+    merged_b6 = os.path.join(options.output_dir, "merged_reads.usearch.b6")
     usearch(merged_fasta.name, merged_b6)
 
     sys.stderr.write("\n\nParsing USEARCH results...")
@@ -242,18 +250,26 @@ def main():
 
     if options.save_unaligned:
       sys.stderr.write("\nFinding and writing unaligned reads...")
-      unaligned_fasta = os.path.join(options.output_dir, "merged_reads.unaligned.fastq")
+      unaligned_fasta = os.path.join(options.output_dir, "merged_reads.unaligned" + (".fa" if options.fasta else ".fastq"))
       extract_unaligned_lomem(merged_b6, options.merged_fname, unaligned_fasta)
       sys.stderr.write("\n")
   else:
-    sys.stderr.write("Converting forward reads to FASTA...")
-    fwd_fasta = fastq_to_fasta(options.fwd_fname)
+    if not options.fasta:
+      sys.stderr.write("Converting forward reads to FASTA...")
+      fwd_fasta = fastq_to_fasta(options.fwd_fname)
+    else:
+      fwd_fasta = count_reads_fasta(options.fwd_fname)
+
     fwd_b6 = os.path.join(options.output_dir, "fwd_reads.usearch.b6")
     sys.stderr.write("\nRunning USEARCH on forward reads...")
     usearch(fwd_fasta.name, fwd_b6)
 
-    sys.stderr.write("\n\nConverting reverse reads to FASTA...")
-    rev_fasta = fastq_to_fasta(options.rev_fname)
+    if not options.fasta:
+      sys.stderr.write("\n\nConverting reverse reads to FASTA...")
+      rev_fasta = fastq_to_fasta(options.rev_fname)
+    else:
+      rev_fasta = count_reads_fasta(options.rev_fname)
+
     rev_b6 = os.path.join(options.output_dir, "rev_reads.usearch.b6")
     sys.stderr.write("\nRunning USEARCH on reverse reads...")
     usearch(rev_fasta.name, rev_b6)
@@ -276,11 +292,11 @@ def main():
 
     if options.save_unaligned:
       sys.stderr.write("\nFinding and writing unaligned forward reads...")
-      fwd_unaligned_fasta = os.path.join(options.output_dir, "fwd_reads.unaligned.fastq")
+      fwd_unaligned_fasta = os.path.join(options.output_dir, "fwd_reads.unaligned" + (".fa" if options.fasta else ".fastq"))
       extract_unaligned_lomem(fwd_b6, options.fwd_fname, fwd_unaligned_fasta)
 
       sys.stderr.write("\nFinding and writing unaligned reverse reads...")
-      rev_unaligned_fasta = os.path.join(options.output_dir, "rev_reads.unaligned.fastq")
+      rev_unaligned_fasta = os.path.join(options.output_dir, "rev_reads.unaligned" + (".fa" if options.fasta else ".fastq"))
       extract_unaligned_lomem(rev_b6, options.rev_fname, rev_unaligned_fasta)
       sys.stderr.write("\n")
 

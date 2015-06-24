@@ -49,3 +49,16 @@ def fastq_to_fasta(input_fname):
   outfile.read_count = count
 
   return outfile
+
+def count_reads_fasta(input_fname):
+  outfile = tempfile.NamedTemporaryFile(delete=True)
+
+  count = 0
+
+  for l in open(input_fname, "r"):
+    if l.startswith(">"):
+      count += 1
+
+  outfile.read_count = count
+
+  return outfile
