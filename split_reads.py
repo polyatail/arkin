@@ -37,7 +37,7 @@ def load_formats(fname):
 
   # format_name fastq_or_fasta min_read_length max_read_length regexp
   for l in open(fname, "r"):
-    if l.startswith("#"):
+    if l.startswith("#") or not l.strip():
       continue
 
     l = l.strip().split("\t")
