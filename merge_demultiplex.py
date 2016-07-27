@@ -22,6 +22,14 @@ import zipfile
 
 PATH_TO_PEAR = "pear"
 
+NBJ_V3V4_FWD_PRIMER = ["CCTACGGGAGGCAGCAG"]
+NBJ_V3V4_REV_PRIMER = ["ATTAGAAACCCCAGTAGTCC", "ATTAGAAACCCCGGTAGTCC", "ATTAGAAACCCCTGTAGTCC",
+                       "ATTAGAAACCCGAGTAGTCC", "ATTAGAAACCCGGGTAGTCC", "ATTAGAAACCCGTGTAGTCC", 
+                       "ATTAGAAACCCTAGTAGTCC", "ATTAGAAACCCTGGTAGTCC", "ATTAGAAACCCTTGTAGTCC", 
+                       "ATTAGATACCCCAGTAGTCC", "ATTAGATACCCCGGTAGTCC", "ATTAGATACCCCTGTAGTCC", 
+                       "ATTAGATACCCGAGTAGTCC", "ATTAGATACCCGGGTAGTCC", "ATTAGATACCCGTGTAGTCC", 
+                       "ATTAGATACCCTAGTAGTCC", "ATTAGATACCCTGGTAGTCC", "ATTAGATACCCTTGTAGTCC"]
+
 hamming_dist = lambda a, b: sum([1 for x, y in zip(a, b) if x != y])
 revcomp_trans = maketrans("ATGCN", "TACGN")
 revcomp = lambda x: translate(x[::-1], revcomp_trans)
@@ -169,6 +177,39 @@ def find_pairs(zipfile_obj):
 
   return list(set(pairs))
 
+def trim_primers(read, fwd_primer, rev_primer, max_mismatch):
+  seq = read.sequence
+  f_match = False
+  r_match = False
+
+  # look for forward match
+  for primer in fwd_primer:
+    for i in range(0, 7):
+      if hamming_dist(seq[i:i + len(primer)], primer) <= max_mismatch:
+        f_match = i
+        break
+
+    if f_match:
+      break
+
+  # look for forward match
+  for primer in rev_primer:
+    for i in range(0, 7):
+      if hamming_dist(seq[len(seq) - len(primer) - i:len(seq) - i], primer) <= max_mismatch:
+        r_match = len(seq) - i
+        break
+
+    if r_match:
+      break
+
+  if not (f_match and r_match):
+    return False
+  else:
+    read.sequence = read.sequence[f_match:r_match]
+    read.quals = read.quals[f_match:r_match]
+
+    return read
+
 def match_bc(read, bcs, max_mismatch):
   # greedy barcode matching algorithm returns first barcode with a match
   # hamming distance <= max mismatches away
@@ -234,7 +275,7 @@ def parse_options(arguments):
                         version="%prog " + str(__version__))
 
   group1 = OptionGroup(parser, "Input Files")
-  group2 = OptionGroup(parser, "Demultiplexing")
+  group2 = OptionGroup(parser, "Trimming and Demultiplexing")
   group3 = OptionGroup(parser, "Read Merging")
   group4 = OptionGroup(parser, "Quality Filtering")
 
@@ -314,6 +355,13 @@ def parse_options(arguments):
                     metavar="",
                     default=True,
                     help="name reads by barcodes, not by sample names")
+
+  group2.add_option("--trim-nbj",
+                    dest="trim_nbj",
+                    action="store_true",
+                    metavar="",
+                    default=False,
+                    help="trim NBJ primers from both sides of the reads")
 
   group3.add_option("--merge",
                     dest="merge",
@@ -437,8 +485,13 @@ def parse_options(arguments):
     parser.print_help()
     sys.exit(1)
 
-  if options.dir_name and (options.use_plate or options.max_mismatch):
-    print "Error: --no-plate-layout and --max-mismatch don't make sense with -d/-e"
+  if options.dir_name and options.use_plate == False:
+    print "Error: --no-plate-layout doesn't make sense with -d/-e"
+    parser.print_help()
+    sys.exit(1)
+
+  if options.trim_nbj and not (options.merge or options.merged_fname):
+    print "Error: Trimming NBJ primers supported only on merged reads"
     parser.print_help()
     sys.exit(1)
 
@@ -498,6 +551,7 @@ def main():
 
       total_reads = 0.0
       quality_reads = 0.0
+      nbj_trim_fail = 0.0
 
       if options.merge:
         # run pear to merge reads
@@ -542,8 +596,17 @@ def main():
 
           merged_read.id = "%s_%s" % (sample, barcode_to_count[sample])
 
-          # write to file
-          assigned.write(merged_read.raw())
+          if options.trim_nbj:
+            nbj_read = trim_primers(merged_read, NBJ_V3V4_FWD_PRIMER, NBJ_V3V4_REV_PRIMER, options.max_mismatch)
+
+            if nbj_read:
+              assigned.write(nbj_read.raw())
+            else:
+              nbj_trim_fail += 1
+              merged_read.id = "%s-NBJTRIMFAIL" % merged_read.id
+              unassigned.write(merged_read.raw())
+          else:
+            assigned.write(merged_read.raw())
         else:
           # demultiplex
           dm_out = demultiplex(merged_read, fwd_bcs.values(), None, rev_bcs.values(), options.max_mismatch)
@@ -578,7 +641,17 @@ def main():
             else:
               trimmed_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
   
-            assigned.write(trimmed_read.raw())
+            if options.trim_nbj:
+              nbj_read = trim_primers(trimmed_read, NBJ_V3V4_FWD_PRIMER, NBJ_V3V4_REV_PRIMER, options.max_mismatch)
+  
+              if nbj_read:
+                assigned.write(nbj_read.raw())
+              else:
+                nbj_trim_fail += 1
+                trimmed_read.id = "%s-NBJTRIMFAIL" % trimmed_read.id
+                unassigned.write(trimmed_read.raw())
+            else:
+              assigned.write(trimmed_read.raw())
 
       if total_reads > 0:
         if quality_reads / total_reads < options.min_qual_perc:
@@ -587,6 +660,10 @@ def main():
       sys.stderr.write("\nSummary")
       sys.stderr.write("\n  Total reads:       %d" % total_reads)
       sys.stderr.write("\n  Quality reads:     %d" % quality_reads)
+
+      if options.trim_nbj:
+        sys.stderr.write("\n  Failed NBJ Trim:   %d" % nbj_trim_fail)
+
       sys.stderr.write("\n  Min read length:   %d" % min(read_length_bins.keys()))
       sys.stderr.write("\n  Mean read length:  %d" % mean(read_length_bins.keys()))
       sys.stderr.write("\n  Max read length:   %d\n" % max(read_length_bins.keys()))
