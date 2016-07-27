@@ -293,7 +293,7 @@ def parse_options(arguments):
                     default=False,
                     help="directory containing demultiplexed reads")
 
-  parser.add_option("-e",
+  group1.add_option("-e",
                     dest="multi_plates",
                     type="int",
                     action="append",
