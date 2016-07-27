@@ -428,7 +428,6 @@ def parse_options(arguments):
     parser.print_help()
     sys.exit(1)
 
-  options.min_merged_perc /= 100.0
   options.min_qual_perc /= 100.0
 
   if options.merged_fname and \
