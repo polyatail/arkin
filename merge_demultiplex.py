@@ -42,6 +42,26 @@ def fetch_unzip(zipfile_obj, filename):
 
   return ungzipped
 
+def pool_unzip(fname_list, sample_list, status_msg):
+  # accepts a list of gzip'd filenames and combines them all into
+  # a single unzipped FASTQ, renaming reads to samples
+
+  pooled_file = tempfile.NamedTemporaryFile(delete=False)
+
+  for fname, sample in zip(fname_list, sample_list):
+    sys.stderr.write("\rPooling %s -> %s: Sample %s" % (status_msg, pooled_file.name, sample))
+
+    read_num = 1
+
+    for read in fast_fastq(gzip.GzipFile(fname).readlines()):
+      read.id = "%s_%s" % (sample, read_num)
+      pooled_file.write(read.raw())
+      read_num += 1
+
+  sys.stderr.write("\n")
+
+  return pooled_file
+
 def pear(fwd_fname, rev_fname, mem_size, num_threads):
   # accepts fwd and rev paired end reads, returns temporary file containing
   # presumably overlapping reads merged into single reads and percentage of
@@ -80,6 +100,44 @@ def pear(fwd_fname, rev_fname, mem_size, num_threads):
         stats["unassembled_reads"] = perc
 
   return outfile, stats, "".join(raw_pear_log)
+
+def find_subdirs(dir_name, plates):
+  # scan directory for samples matching plates
+  to_match = ["P%02d" % x for x in plates]
+
+  fwd_files = []
+  rev_files = []
+  sample_list = []
+
+  for d in os.listdir(dir_name):
+    # expecting d.*/Data/Intensities/BaseCalls/.* to have R1 and R2
+    if d[:3] in to_match:
+      subdir_path = os.path.join(dir_name, d, "Data", "Intensities", "BaseCalls")
+      subdir = os.listdir(subdir_path)
+
+      r1_match = False
+      r2_match = False
+
+      # ensure each sample has a pair
+      for sd in subdir:
+        sd_split = sd.strip().split("_")
+
+        if sd_split[0] == d[:6] and sd_split[4] == "001.fastq.gz":
+          sd_path = os.path.join(subdir_path, sd)
+
+          if sd_split[3] == "R1" and os.path.isfile(sd_path):
+            r1_match = sd_path
+          elif sd_split[3] == "R2" and os.path.isfile(sd_path):
+            r2_match = sd_path
+
+      if r1_match and r2_match:
+        fwd_files.append(r1_match)
+        rev_files.append(r2_match)
+        sample_list.append(d[1:6])
+      else:
+        sys.stderr.write("Warning: Directory %s did not contain forward and reverse read files\n")
+
+  return fwd_files, rev_files, sample_list
 
 def find_pairs(zipfile_obj):
   # accepts zipfile object and returns tuples of paired-end reads
@@ -229,6 +287,20 @@ def parse_options(arguments):
                     default=False,
                     help="name of sample within BaseSpace zipfile")
 
+  group1.add_option("-d",
+                    dest="dir_name",
+                    type="str",
+                    default=False,
+                    help="directory containing demultiplexed reads")
+
+  parser.add_option("-e",
+                    dest="multi_plates",
+                    type="int",
+                    action="append",
+                    metavar="[plate_num]",
+                    default=[],
+                    help="plate(s) to use within demultiplexed directory")
+
   group2.add_option("--max-mismatch",
                     dest="max_mismatch",
                     type="int",
@@ -291,8 +363,9 @@ def parse_options(arguments):
 
   options, args = parser.parse_args(arguments)
 
-  if (options.use_plate == True and len(args) <> 2) or \
-     (options.use_plate == False and len(args) <> 1):
+  if (options.use_plate == True and options.dir_name == False and len(args) <> 2) or \
+     (options.use_plate == False and options.dir_name == False and len(args) <> 1) or \
+     (options.dir_name and len(args) <> 0):
     print "Error: Incorrect number of arguments"
     parser.print_help()
     sys.exit(1)
@@ -312,22 +385,28 @@ def parse_options(arguments):
 
   if options.merged_fname and \
      (options.zip_fname or options.sample_name) and \
-     (options.fwd_fname or options.rev_fname):
-    print "Error: Options -m and -z/-s and -f/-r are mutually exclusive"
+     (options.fwd_fname or options.rev_fname) and \
+     (options.dir_name or options.multi_plates):
+    print "Error: Options -m and -z/-s and -f/-r and -d/-e are mutually exclusive"
     parser.print_help()
     sys.exit(1)
   elif not (options.merged_fname or options.zip_fname or \
             options.sample_name or options.fwd_fname or \
-            options.rev_fname):
-    print "Error: Must specify either -m, -z/-s, or -f/-r"
+            options.rev_fname or options.dir_name or \
+            options.multi_plates):
+    print "Error: Must specify either -m, -z/-s, -f/-r, or -d/-e"
     parser.print_help()
     sys.exit(1)
   elif bool(options.fwd_fname) ^ bool(options.rev_fname):
-    print "Error: When using -f or -r, both must be specified"
+    print "Error: When using -f/-r, both must be specified"
     parser.print_help()
     sys.exit(1)
   elif bool(options.zip_fname) ^ bool(options.sample_name):
-    print "Error: When using -z or -s, both must be specified"
+    print "Error: When using -z/-s, both must be specified"
+    parser.print_help()
+    sys.exit(1)
+  elif bool(options.dir_name) ^ bool(options.multi_plates):
+    print "Error: When using -d/-e, both must be specified"
     parser.print_help()
     sys.exit(1)
 
@@ -343,13 +422,23 @@ def parse_options(arguments):
       parser.print_help()
       sys.exit(1)
 
-  if not os.path.isfile(args[0]):
+  if options.dir_name and not os.path.isdir(options.dir_name):
+    print "Error: Directory specified with -d does not exist"
+    parser.print_help()
+    sys.exit(1)
+
+  if options.dir_name == False and not os.path.isfile(args[0]):
     print "Error: Specified barcode file does not exist"
     parser.print_help()
     sys.exit(1)
 
-  if options.use_plate and not os.path.isfile(args[1]):
+  if options.dir_name == False and options.use_plate and not os.path.isfile(args[1]):
     print "Error: Specified plate layout file does not exist"
+    parser.print_help()
+    sys.exit(1)
+
+  if options.dir_name and (options.use_plate or options.max_mismatch):
+    print "Error: --no-plate-layout and --max-mismatch don't make sense with -d/-e"
     parser.print_help()
     sys.exit(1)
 
@@ -367,13 +456,14 @@ def main():
   parse_options(sys.argv[1:])
 
   # load barcodes
-  fwd_bcs, rev_bcs = load_barcodes(args[0])
+  if options.dir_name == False:
+    fwd_bcs, rev_bcs = load_barcodes(args[0])
 
-  if options.use_plate:
+  if options.dir_name == False and options.use_plate:
     plate = load_plate(args[1])
     barcode_to_sample = map_bc_to_sample(plate, fwd_bcs, rev_bcs)
 
-  if options.zip_fname:
+  if options.zip_fname and options.sample_name:
     # open zipfile
     miseq_zip = zipfile.ZipFile(options.zip_fname)
 
@@ -391,6 +481,13 @@ def main():
   elif options.fwd_fname and options.rev_fname:
     fwd = open(options.fwd_fname, "r")
     rev = open(options.rev_fname, "r")
+  elif options.dir_name and options.multi_plates:
+    # find pairs in directory
+    fwd_files, rev_files, sample_list = find_subdirs(options.dir_name, options.multi_plates)
+
+    # combine all desired files into new fwd and rev files
+    fwd = pool_unzip(fwd_files, sample_list, "Read 1")
+    rev = pool_unzip(rev_files, sample_list, "Read 2")
 
   barcode_to_count = {}
 
@@ -434,40 +531,54 @@ def main():
         except KeyError:
           read_length_bins[len(merged_read.sequence)] = 1
 
-        # demultiplex
-        dm_out = demultiplex(merged_read, fwd_bcs.values(), None, rev_bcs.values(), options.max_mismatch)
+        if options.dir_name:
+          sample = merged_read.id.split("_")[0]
 
-        if dm_out == False:
-          # strip pair info from read and write to unassigned file
-          merged_read.id = merged_read.id.split(" ")[0]
-          unassigned.write(merged_read.raw())
-        else:
-          # rename read to barcodes used and write to assigned file
-          trimmed_read, _, f_bc, r_bc = dm_out
-
-          bc_name = "%s_%s" % (f_bc, r_bc)
-
+          # renumber reads so that they refer to new merged reads
           try:
-            barcode_to_count[bc_name] += 1
+            barcode_to_count[sample] += 1
           except KeyError:
-            barcode_to_count[bc_name] = 1
+            barcode_to_count[sample] = 1
 
-          # we want to rename to sample names, and a barcode was found to match
-          # something in barcodes.txt, but that particular barcode is not in use
-          # in our plate layout. in this case, ignore this read
-          if options.use_plate and bc_name not in barcode_to_sample:
+          merged_read.id = "%s_%s" % (sample, barcode_to_count[sample])
+
+          # write to file
+          assigned.write(merged_read.raw())
+        else:
+          # demultiplex
+          dm_out = demultiplex(merged_read, fwd_bcs.values(), None, rev_bcs.values(), options.max_mismatch)
+  
+          if dm_out == False:
             # strip pair info from read and write to unassigned file
             merged_read.id = merged_read.id.split(" ")[0]
             unassigned.write(merged_read.raw())
-
-            continue
-
-          if options.use_plate:
-            trimmed_read.id = "%s_%s" % (barcode_to_sample[bc_name], barcode_to_count[bc_name])
           else:
-            trimmed_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
-
-          assigned.write(trimmed_read.raw())
+            # rename read to barcodes used and write to assigned file
+            trimmed_read, _, f_bc, r_bc = dm_out
+  
+            bc_name = "%s_%s" % (f_bc, r_bc)
+  
+            try:
+              barcode_to_count[bc_name] += 1
+            except KeyError:
+              barcode_to_count[bc_name] = 1
+  
+            # we want to rename to sample names, and a barcode was found to match
+            # something in barcodes.txt, but that particular barcode is not in use
+            # in our plate layout. in this case, ignore this read
+            if options.use_plate and bc_name not in barcode_to_sample:
+              # strip pair info from read and write to unassigned file
+              merged_read.id = merged_read.id.split(" ")[0]
+              unassigned.write(merged_read.raw())
+  
+              continue
+  
+            if options.use_plate:
+              trimmed_read.id = "%s_%s" % (barcode_to_sample[bc_name], barcode_to_count[bc_name])
+            else:
+              trimmed_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
+  
+            assigned.write(trimmed_read.raw())
 
       if total_reads > 0:
         if quality_reads / total_reads < options.min_qual_perc:
@@ -515,53 +626,69 @@ def main():
 
         quality_reads += 1
 
-        # demultiplex
-        dm_out = demultiplex(f_read, fwd_bcs.values(), r_read, rev_bcs.values(), options.max_mismatch)
+        if options.dir_name:
+          # count reads
+          sample1 = f_read.id.split("_")[0]
+          sample2 = r_read.id.split("_")[0]
 
-        if dm_out == False:
-          # strip pair info from read and write to unassigned file
-          f_read.id = f_read.id.split(" ")[0]
-          f_unassigned.write(f_read.raw())
-
-          r_read.id = r_read.id.split(" ")[0]
-          r_unassigned.write(r_read.raw())
-        else:
-          # rename reads to barcodes used and write to assigned file
-          trimmed_f_read, trimmed_r_read, f_bc, r_bc = dm_out
-
-          bc_name = "%s_%s" % (f_bc, r_bc)
+          assert sample1 == sample2
 
           try:
-            barcode_to_count[bc_name] += 1
+            barcode_to_count[sample1] += 1
           except KeyError:
-            barcode_to_count[bc_name] = 1
+            barcode_to_count[sample1] = 1
 
-          # we want to rename to sample names, and a barcode was found to match
-          # something in barcodes.txt, but that particular barcode is not in use
-          # in our plate layout. in this case, ignore this read
-          if options.use_plate and bc_name not in barcode_to_sample:
+          # just write the filtered reads to their final destination
+          f_assigned.write(f_read.raw())
+          r_assigned.write(r_read.raw())
+        else:
+          # demultiplex
+          dm_out = demultiplex(f_read, fwd_bcs.values(), r_read, rev_bcs.values(), options.max_mismatch)
+  
+          if dm_out == False:
             # strip pair info from read and write to unassigned file
             f_read.id = f_read.id.split(" ")[0]
             f_unassigned.write(f_read.raw())
-
+  
             r_read.id = r_read.id.split(" ")[0]
             r_unassigned.write(r_read.raw())
-
-            continue
-
-          if options.use_plate:
-            trimmed_f_read.id = "%s_%s" % (barcode_to_sample[bc_name], barcode_to_count[bc_name])
           else:
-            trimmed_f_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
-
-          f_assigned.write(trimmed_f_read.raw())
-
-          if options.use_plate:
-            trimmed_r_read.id = "%s_%s" % (barcode_to_sample[bc_name], barcode_to_count[bc_name])
-          else:
-            trimmed_r_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
-
-          r_assigned.write(trimmed_r_read.raw())
+            # rename reads to barcodes used and write to assigned file
+            trimmed_f_read, trimmed_r_read, f_bc, r_bc = dm_out
+  
+            bc_name = "%s_%s" % (f_bc, r_bc)
+  
+            try:
+              barcode_to_count[bc_name] += 1
+            except KeyError:
+              barcode_to_count[bc_name] = 1
+  
+            # we want to rename to sample names, and a barcode was found to match
+            # something in barcodes.txt, but that particular barcode is not in use
+            # in our plate layout. in this case, ignore this read
+            if options.use_plate and bc_name not in barcode_to_sample:
+              # strip pair info from read and write to unassigned file
+              f_read.id = f_read.id.split(" ")[0]
+              f_unassigned.write(f_read.raw())
+  
+              r_read.id = r_read.id.split(" ")[0]
+              r_unassigned.write(r_read.raw())
+  
+              continue
+  
+            if options.use_plate:
+              trimmed_f_read.id = "%s_%s" % (barcode_to_sample[bc_name], barcode_to_count[bc_name])
+            else:
+              trimmed_f_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
+  
+            f_assigned.write(trimmed_f_read.raw())
+  
+            if options.use_plate:
+              trimmed_r_read.id = "%s_%s" % (barcode_to_sample[bc_name], barcode_to_count[bc_name])
+            else:
+              trimmed_r_read.id = "%s_%s" % (bc_name, barcode_to_count[bc_name])
+  
+            r_assigned.write(trimmed_r_read.raw())
 
       if total_reads > 0:
         if quality_reads / total_reads < options.min_qual_perc:
@@ -577,7 +704,7 @@ def main():
   sorted_barcode_to_count = sorted(barcode_to_count.items(), key=lambda x: x[1], reverse=True)
 
   with open(os.path.join(options.output_dir, "barcode_to_count.log"), "w") as fp:
-    if options.use_plate:
+    if options.dir_name == False and options.use_plate:
       for barcode, count in sorted_barcode_to_count:
         try:
           sample_name = barcode_to_sample[barcode]
@@ -590,7 +717,7 @@ def main():
         fp.write("%s\t%s\n" % (barcode, count))
 
   # remove temporary files
-  if options.zip_fname:
+  if options.zip_fname or options.dir_name:
     os.unlink(fwd.name)
     os.unlink(rev.name)
 
